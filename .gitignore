@@ -1,0 +1,15 @@
+# Python 缓存文件
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 编译和打包文件
+*.egg-info/
+dist/
+build/
+
+# Jupyter Notebook 检查点
+.ipynb_checkpoints/
+
+# VSCode 配置
+.vscode/
