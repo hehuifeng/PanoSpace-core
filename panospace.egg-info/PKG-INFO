@@ -1,0 +1,22 @@
+Metadata-Version: 2.4
+Name: panospace
+Version: 0.1.0
+Summary: PanoSpace enables precise single-cell spatial tissue analysis.
+Home-page: https://github.com/hehuifeng/PanoSpace
+Author: He Hui-Feng
+Author-email: huifeng@mails.ccnu.edu.cn
+Classifier: Programming Language :: Python :: 3.9
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: Ubuntu 22.04.4 LTS
+Requires-Python: >=3.9
+License-File: LICENSE
+Requires-Dist: numpy
+Requires-Dist: pandas
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: home-page
+Dynamic: license-file
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary

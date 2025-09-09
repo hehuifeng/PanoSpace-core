@@ -13,9 +13,9 @@ setup(
         'pandas',
     ],
     classifiers=[  
-        'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.9',
         'License :: OSI Approved :: MIT License',
         'Operating System :: Ubuntu 22.04.4 LTS',
     ],
-    python_requires='>=3.11',  # Specify Python version compatibility
+    python_requires='>=3.9',  # Specify Python version compatibility
 )
