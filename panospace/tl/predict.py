@@ -6,13 +6,11 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Mapping, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from anndata import AnnData
 
-import numpy as np
-import pandas as pd
 from tl import _import_backend
 
 logger = logging.getLogger("panospace.tl")
@@ -31,7 +29,7 @@ def genexp_predictor(
     celltype_list: list[str],
     celltype_column: str = "celltype_major",
     backend: str = "predictor",
-) -> Tuple[AnnData, AnnData]:
+) -> AnnData:
     """基于单细胞数据预测空间转录组的基因表达。
 
     Parameters
@@ -51,10 +49,8 @@ def genexp_predictor(
 
     Returns
     -------
-    Tuple[AnnData, AnnData]
-        返回两个 AnnData 对象：
-        - 第一个包含预测的基因表达数据。
-        - 第二个包含每种细胞类型的平均基因表达数据。
+    AnnData
+        返回一个包含预测基因表达数据的 AnnData 对象。
 
     Raises
     ------
