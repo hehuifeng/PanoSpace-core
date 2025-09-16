@@ -3,16 +3,16 @@
 # Download scripts
 #
 # @ Fabian Hörst, fabian.hoerst@uk-essen.de
-# Institute for Artifical Intelligence in Medicine,
-# University Medicine Essenfrom pathlib import Pathfrom pathlib import Path
-
+# Institute for Artificial Intelligence in Medicine,
+# University Medicine Essen
 
 from pathlib import Path
+import logging
+from typing import Optional, Union
+
 import requests
 from tqdm import tqdm
-from typing import Union, Optional
 
-import logging
 
 class NullLogger:
     """A logger that does nothing."""
@@ -32,8 +32,9 @@ class NullLogger:
     def critical(self, *args, **kwargs):
         pass
 
+
 class PrintLogger:
-    """A logger that does nothing."""
+    """A logger that prints messages to stdout."""
 
     def info(self, *args, **kwargs):
         print(*args)
@@ -49,7 +50,8 @@ class PrintLogger:
 
     def critical(self, *args, **kwargs):
         print(*args)
-        
+
+
 def file_exists(directory_path: Path, file_name: str) -> bool:
     """Check if a file exists in a specific directory.
 
@@ -115,6 +117,6 @@ def check_and_download(
     if not file_exists(directory_path, file_name):
         file_path = directory_path / file_name
         logger.info(f"Downloading file to {file_path}")
-        download_file(download_link, file_path)
+        download_file(download_link, file_path, logger=logger)
     else:
         logger.info(f"The file {file_name} already exists in {directory_path}.")
