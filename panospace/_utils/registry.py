@@ -8,7 +8,7 @@ from importlib import metadata
 from typing import Any, Dict
 
 
-class registry:
+class Registry:
     """A simple registry to store and retrieve plugin implementations."""
 
     def __init__(self, group: str):
@@ -53,4 +53,4 @@ class registry:
 
 
 # Default global registry for PanoSpace plugins
-registry = registry(group="panospace.plugins")
+registry = Registry(group="panospace.plugins")
