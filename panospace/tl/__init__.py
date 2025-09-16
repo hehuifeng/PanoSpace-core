@@ -15,63 +15,57 @@ nothing until a specific function is accessed.
 """
 from __future__ import annotations
 
-
-import importlib
 import logging
-from types import ModuleType
-from typing import Any, Dict
+
+from typing import Mapping
 
 logger = logging.getLogger("panospace.tl")
 
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from .detect import detect_cells
-    from .annotate import deconv_celltype
 
-# -----------------------------------------------------------------------------
-# Mapping: public attribute name  ->  sub-module where it is implemented
-# -----------------------------------------------------------------------------
-_SUBMODULE_ATTRS: Dict[str, str] = {
-    # detection
-    "detect_cells": "detect",
-    "CellDetectionResult": "detect",
-    # annotation
-    "deconv_celltype": "annotate",
-    "AnnotationResult": "annotate",
-    # gene expression prediction
-    "predict_expr": "predict",
-    # micro-environment analysis
-    "microenv_analysis": "microenv",
+_BACKENDS: Mapping[str, str] = {
+    "predictor": "panospace._core.prediction.predictor:predictor_core",
+    "RCTD": "panospace._core.annotation.RCTD:annotate_cells_core",
+    "cell2location": "panospace._core.annotation.cell2location:annotate_cells_core",
+    "spatialDWLS": "panospace._core.annotation.spatialDWLS:annotate_cells_core",
+    "endecon": "panospace._core.annotation.endecon:endecon_core",
+    "superres_core": "panospace._core.annotation.superres:superres_core",
+    "annotator_core": "panospace._core.annotation.annotator:annotator_core",
 }
 
-__all__ = list(_SUBMODULE_ATTRS)
+# Validate backend imports during initialization
+for backend, path in _BACKENDS.items():
+    try:
+        module_path, func_name = path.split(":")
+        mod = __import__(module_path, fromlist=[func_name])
+        getattr(mod, func_name)
+    except (ImportError, AttributeError) as e:
+        logger.error(f"Failed to import backend '{backend}' from '{path}': {e}")
+        raise ImportError(f"Backend '{backend}' could not be imported. Check installation and dependencies.")
+    
+def _import_backend(name: str):
+    """Dynamically import a backend function by name.
 
+    Parameters
+    ----------
+    name : str
+        Backend name, must be one of the keys in `_BACKENDS`.
 
-# -----------------------------------------------------------------------------
-# Lazy attribute access
-# -----------------------------------------------------------------------------
+    Returns
+    -------
+    callable
+        The backend function object.
 
-def __getattr__(name: str) -> Any:  # noqa: D401  (non imperative docstring)
-    """Dynamically import sub-modules on first access.
-
-    This keeps the initial import footprint minimal - most sub-modules depend on
-    large libraries such as *torch* or *networkx*.  Once an attribute is
-    resolved, it is cached in ``globals()`` for subsequent look-ups.
+    Raises
+    ------
+    ValueError
+        If the backend name is not registered.
     """
-
-    if name not in _SUBMODULE_ATTRS:
-        raise AttributeError(f"module 'panospace.tl' has no attribute {name!r}")
-
-    submod_name = _SUBMODULE_ATTRS[name]
-    full_name = f"panospace.tl.{submod_name}"
-
-    logger.debug("Lazy-loading %%s for attribute %%s", full_name, name)
-
-    submod: ModuleType = importlib.import_module(full_name)
-    attr = getattr(submod, name)
-    globals()[name] = attr  # cache for future access
-    return attr
+    if name not in _BACKENDS:
+        raise ValueError(f"Unknown annotation backend '{name}'. Available: {list(_BACKENDS)}")
+    module_path, func_name = _BACKENDS[name].split(":")
+    mod = __import__(module_path, fromlist=[func_name])
+    return getattr(mod, func_name)
 
 
-def __dir__() -> list[str]:  # pragma: no cover
-    return sorted(list(__all__))
+
+__all__ = ["_import_backend"]

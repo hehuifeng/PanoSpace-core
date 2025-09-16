@@ -6,10 +6,8 @@ import anndata as ad
 from PIL import Image
 Image.MAX_IMAGE_PIXELS = None
 
-import matplotlib.pyplot as plt
 from tqdm import tqdm
 from itertools import product
-# from utils import if_contain_batch
 
 from typing import Literal, Union, List
 
@@ -22,7 +20,6 @@ import pytorch_lightning as pl
 
 
 from transformers import AutoModel
-from torchvision.transforms import ToTensor
 from torchvision import transforms
 
 import hashlib, os, json
@@ -172,12 +169,12 @@ class DINOv2_superres_deconv(object):
                  img_dir,
                  radius=129,
                  neighb=2,
-                 num_classes=9,
                  cache_dir="~/.panospace_cache"):
         
         self.img_dir = img_dir
         self.deconv_adata = deconv_adata
         self.cell_type_name = list(self.deconv_adata.uns['celltype'])
+        num_classes = len(self.cell_type_name)
 
         params = {
             "radius": radius,
@@ -288,7 +285,7 @@ class DINOv2_superres_deconv(object):
         # print(predict)
         self.sr_adata.obs[self.cell_type_name] = predict
 
-        self.sr_adata.write(os.path.join(self.path,'sr_adata.h5ad'))
+        return self.sr_adata
 
 
 class ImageTransform:

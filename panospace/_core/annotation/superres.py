@@ -6,7 +6,8 @@ import scanpy as sc
 import anndata as ad
 from scipy.sparse import csr_matrix
 
-from ._superres_backend.superres_utils import *
+from typing import Literal
+from ._superres_backend.superres_utils import DINOv2_superres_deconv
 
 import logging
 from panospace._core import register
@@ -16,10 +17,23 @@ logger = logging.getLogger(__name__)
 
 
 def superres_core(
-    cells: ad.AnnData,
+    deconv_adata: ad.AnnData,
     adata_vis: ad.AnnData,
     img_dir: str,
     neighb: int=3,
     radius: int=129,
-    num_classes: int=9
+    epoch: int=50,
+    batch_size: int=32,
+    num_workers: int=4,
+    accelerator: Literal['cpu', 'gpu']='gpu'
 ):
+    sr_inferencer=DINOv2_superres_deconv(deconv_adata,
+                                img_dir=img_dir,
+                                radius=radius,
+                                neighb=neighb,
+                                cache_dir="~/.panospace_cache")
+
+    sr_inferencer.run_train(epoch=epoch, batch_size=batch_size, num_workers=num_workers, accelerator=accelerator)
+    sr_adata = sr_inferencer.run_superres()
+
+    return sr_adata

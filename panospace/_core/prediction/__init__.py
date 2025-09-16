@@ -31,54 +31,5 @@ from typing import Callable, Dict, List, TYPE_CHECKING
 
 from panospace._core import available as _available_global, get as _get_global
 
-logger = logging.getLogger("panospace._core.prediction")
+logger = logging.getLogger(__name__)
 
-if TYPE_CHECKING:
-    from spatialdata import SpatialData  # pragma: no cover
-
-# -----------------------------------------------------------------------------
-# Type aliases
-# -----------------------------------------------------------------------------
-BackendFunc = Callable[..., "SpatialData"]
-
-# -----------------------------------------------------------------------------
-# Auto-import optional back-ends
-# -----------------------------------------------------------------------------
-_AUTO_IMPORTS: Dict[str, str] = {
-    # name          module relative to this package
-    "graph_ssl": ".graph_ssl",
-    "gnn_superres": ".gnn_superres",
-    "diffusion": ".diffusion",
-}
-
-for _name, _relmod in _AUTO_IMPORTS.items():
-    try:
-        importlib.import_module(__name__ + _relmod)
-        logger.debug("Auto-imported prediction backend '%s' (%s)", _name, _relmod)
-    except ModuleNotFoundError:  # pragma: no cover - optional dependency missing
-        logger.debug("Prediction backend '%s' not available - optional dependency missing", _name)
-
-# -----------------------------------------------------------------------------
-# Convenience accessors (used by tl.predict)
-# -----------------------------------------------------------------------------
-
-def get_backend(name: str) -> BackendFunc:
-    """Return a *registered* prediction backend by *name*.
-
-    Raises
-    ------
-    KeyError
-        If no backend with that name has been registered.
-    """
-    return _get_global("prediction", name)  # type: ignore[return-value]
-
-
-def available_backends() -> List[str]:
-    """Return the list of currently **available** prediction back-end names."""
-    return _available_global("prediction")
-
-
-__all__ = [
-    "get_backend",
-    "available_backends",
-]

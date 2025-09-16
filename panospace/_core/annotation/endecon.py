@@ -115,7 +115,7 @@ def endecon_core(results_deconv, lambda_=None, prob_quantile=0.5,
     w = np.ones(num_methods) / num_methods
 
     # Initialize H as weighted average
-    print([res.shape for res in results_deconv])
+    # print([res.shape for res in results_deconv])
     H = np.sum([res * w[i] for i, res in enumerate(results_deconv)], axis=0)
 
     k = 1
