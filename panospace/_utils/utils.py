@@ -20,6 +20,72 @@ def radius_membership_sparse(
     dtype=np.int8,
     sort_results: bool = False,
 ) -> csr_matrix:
+    """Construct a sparse membership matrix based on radius-neighborhood queries.
+
+    The function builds a :class:`scipy.sparse.csr_matrix` whose rows correspond to
+    ``query_points`` and whose columns correspond to ``base_points``. An entry is
+    set to one when the distance between the associated points is within the
+    specified radius, and zero otherwise.
+
+    Parameters
+    ----------
+    base_points : numpy.ndarray
+        Array with shape ``(n_base, n_features)`` that stores the reference points
+        used to build the KD-tree.
+    query_points : numpy.ndarray
+        Array with shape ``(n_query, n_features)`` containing the points whose
+        neighbors are queried.
+    r : float or numpy.ndarray
+        Distance threshold(s) used to determine neighborhood membership. A scalar
+        applies the same radius to every query point, while a one-dimensional array
+        of shape ``(n_query,)`` allows specifying a custom radius per query.
+    metric : {"euclidean", "chebyshev"}, default="euclidean"
+        Distance metric used by :class:`sklearn.neighbors.KDTree` when performing
+        the queries.
+    leaf_size : int, default=40
+        Leaf size passed to :class:`sklearn.neighbors.KDTree`, controlling the
+        trade-off between query speed and tree construction cost.
+    chunk_size : int or None, default=None
+        When provided, queries are processed in batches of ``chunk_size`` rows to
+        limit memory usage. ``None`` processes all query points at once.
+    dtype : data-type, default=numpy.int8
+        Data type assigned to the non-zero entries of the resulting sparse matrix.
+    sort_results : bool, default=False
+        Whether the neighbor indices in each row should be sorted. Passed through
+        to :meth:`sklearn.neighbors.KDTree.query_radius`.
+
+    Returns
+    -------
+    scipy.sparse.csr_matrix
+        Sparse membership matrix of shape ``(n_query, n_base)`` where non-zero
+        entries indicate that a ``base_point`` lies within the radius of a
+        ``query_point``.
+
+    Raises
+    ------
+    ValueError
+        If an unsupported metric is requested or if ``r`` is an array with an
+        incompatible shape.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from panospace._utils.utils import radius_membership_sparse
+    >>> base = np.array([[0.0, 0.0], [1.0, 1.0], [2.0, 2.0]])
+    >>> query = np.array([[0.1, 0.1], [1.8, 1.9]])
+    >>> membership = radius_membership_sparse(base, query, r=0.5)
+    >>> membership.toarray()
+    array([[1, 0, 0],
+           [0, 0, 1]], dtype=int8)
+
+    The radius may also be provided per query point and combined with chunked
+    queries when memory is limited:
+
+    >>> radii = np.array([0.5, 0.2])
+    >>> radius_membership_sparse(base, query, r=radii, chunk_size=1).toarray()
+    array([[1, 0, 0],
+           [0, 0, 0]], dtype=int8)
+    """
     if metric not in ("euclidean", "chebyshev"):
         raise ValueError("metric 只能是 'euclidean' 或 'chebyshev'")
 
