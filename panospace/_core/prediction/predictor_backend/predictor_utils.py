@@ -23,6 +23,40 @@ def compute_celltype_means_sparse(
     celltype_list: List[str],
     celltype_column: str = "celltype_major",
 ) -> sp.csr_matrix:
+    """Compute mean expression profiles for each requested cell type.
+
+    The implementation avoids materialising dense intermediate arrays by
+    constructing a sparse one-hot encoding of the requested cell type ordering
+    and using sparse matrix multiplications.  Missing cell types are handled by
+    inserting empty rows whose values remain zero after normalisation.
+
+    Parameters
+    ----------
+    sc_adata
+        Annotated single-cell expression matrix containing the reference
+        profiles. ``sc_adata.X`` is expected to be convertible to ``csr``.
+    celltype_list
+        Ordered list of cell-type names whose mean expression should be
+        returned.  The order of the list defines the row order in the output
+        matrix.
+    celltype_column
+        Observation column in ``sc_adata.obs`` that stores the categorical cell
+        type annotation.  The column is coerced into a categorical series so
+        that unused categories in ``celltype_list`` remain present.
+
+    Returns
+    -------
+    scipy.sparse.csr_matrix
+        Sparse matrix with shape ``(len(celltype_list), n_genes)`` where each
+        row stores the mean expression of the respective cell type.
+
+    Notes
+    -----
+    The mean expression is computed as ``G.T @ X`` where ``G`` is the sparse
+    cell-type indicator matrix.  Rows belonging to cell types that are not
+    present in ``sc_adata`` remain zero because their counts are set to one to
+    avoid division-by-zero during normalisation.
+    """
     # 用稀疏操作计算 group-mean： (onehot^T @ X) / counts
     labels = sc_adata.obs[celltype_column].astype("category")
     # 仅保留需要的类别顺序
@@ -48,6 +82,35 @@ def compute_celltype_means_sparse(
 # 3) 图构建：Delaunay + inverse 距离；添加自环；行归一化成随机游走
 # ---------------------------------------------------------------------
 def construct_graph_delaunay_inverse(coords: np.ndarray) -> sp.csr_matrix:
+    """Construct a row-stochastic affinity matrix from 2-D coordinates.
+
+    The function performs a Delaunay triangulation of the input coordinates to
+    obtain an undirected neighbourhood graph.  Each undirected edge is assigned
+    a symmetric weight equal to the inverse Euclidean distance between the two
+    incident nodes.  Self-loops are added with weights equal to the mean weight
+    of the node's incident edges (or ``1`` for isolated nodes) and the matrix is
+    subsequently row-normalised to form a random-walk transition matrix.
+
+    Parameters
+    ----------
+    coords
+        ``(n, d)`` array of spatial coordinates.  Only the first two dimensions
+        are used by ``scipy.spatial.Delaunay`` and ``n`` may be zero or one.
+
+    Returns
+    -------
+    scipy.sparse.csr_matrix
+        Row-stochastic sparse matrix describing the random-walk graph.  The
+        matrix contains self-loops and is symmetric before the final
+        normalisation.
+
+    Notes
+    -----
+    Degenerate situations are handled explicitly: an empty input yields an
+    empty matrix and a single coordinate produces a ``1x1`` identity matrix.
+    A small ``1e-6`` constant is added to distances to avoid division by zero
+    for coincident points.
+    """
     if coords.shape[0] == 0:
         return sp.csr_matrix((0, 0), dtype=np.float32)
     if coords.shape[0] == 1:
@@ -92,7 +155,31 @@ def construct_graph_delaunay_inverse(coords: np.ndarray) -> sp.csr_matrix:
 # 4) 主类：稀疏实现 + 传播公式保持不变
 # ---------------------------------------------------------------------
 class GeneExpPredictor(object):
+    """Sparse backend used to propagate reference expression to new cells.
+
+    The class orchestrates the computation of cell-type mean profiles, derives
+    spot-specific expression contributions and diffuses the expression to the
+    nuclei that should be inferred.  All heavy computations operate on sparse
+    matrices to keep the memory footprint manageable for large data sets.
+    """
     def __init__(self, sc_adata: ad.AnnData, spot_adata: ad.AnnData, infered_adata: ad.AnnData):
+        """Initialise the predictor with the reference and target data sets.
+
+        Parameters
+        ----------
+        sc_adata
+            Single-cell reference used to compute the mean expression profile
+            for each cell type.
+        spot_adata
+            Spatial transcriptomics data providing the observed spot-level
+            expression and the estimated cell-type mixture proportions.  The
+            matrix is expected to expose the ``spatial`` embedding and a
+            ``radius`` value inside ``.uns``.
+        infered_adata
+            AnnData object representing the nuclei for which expression should
+            be inferred.  The object must include a ``spatial`` embedding and a
+            ``pred_cell_type`` column in ``.obs``.
+        """
         self.sc_adata = sc_adata
         self.spot_adata = spot_adata
         self.infered_adata = infered_adata
@@ -107,6 +194,19 @@ class GeneExpPredictor(object):
 
     @staticmethod
     def _find_common_genes(adata1: ad.AnnData, adata2: ad.AnnData):
+        """Return copies of the inputs restricted to their shared genes.
+
+        Parameters
+        ----------
+        adata1, adata2
+            Input AnnData objects that will be sliced to the intersection of
+            their ``var_names``.
+
+        Returns
+        -------
+        tuple of AnnData
+            The sliced copies of ``adata1`` and ``adata2`` with aligned genes.
+        """
         common_genes = adata1.var_names.intersection(adata2.var_names)
         return adata1[:, common_genes].copy(), adata2[:, common_genes].copy()
 
@@ -115,6 +215,25 @@ class GeneExpPredictor(object):
     #     数学与原式一致：把 Y[i,j] 按 beta_i(k)*mu_k(j) / sum_k 分摊给每个 k
     # ------------------------------
     def ctspecific_spot_gene_exp(self, celltype_list: List[str], celltype_column: str = "celltype_major"):
+        """Compute type-specific spot expression contributions.
+
+        Parameters
+        ----------
+        celltype_list
+            Ordered list of cell types to process.  The same order is used when
+            reading mixture proportions from ``spot_adata.obs``.
+        celltype_column
+            Name of the cell-type annotation column in ``sc_adata`` used to
+            compute the mean expression per type.
+
+        Notes
+        -----
+        The method mirrors the dense implementation from the original backend
+        but keeps the intermediate matrices sparse.  For each cell type the
+        method re-weights the observed spot expression according to the
+        contribution that the type makes to a gene in a spot and stores the
+        transformed expression matrices in :attr:`ct_spot_expr`.
+        """
         # 计算 cell type 均值 (K x G) 稀疏
         self.cell_type_means = compute_celltype_means_sparse(self.sc_adata, celltype_list, celltype_column)
         mu = self.cell_type_means.toarray()  # K x G（K通常较小，密集化可接受）
@@ -180,6 +299,20 @@ class GeneExpPredictor(object):
     # ------------------------------
     @staticmethod
     def concat(ada_list: List[ad.AnnData]) -> ad.AnnData:
+        """Concatenate a list of AnnData objects produced by the predictor.
+
+        Parameters
+        ----------
+        ada_list
+            Sequence of AnnData objects with consistent ``var_names`` and
+            ``spatial`` embeddings.
+
+        Returns
+        -------
+        AnnData
+            New object that stacks the expression matrices, observation names
+            and spatial coordinates while preserving the predicted cell types.
+        """
         if len(ada_list) == 0:
             return ad.AnnData(X=sp.csr_matrix((0, 0)))
         X = vstack([a.X for a in ada_list], format="csr")
@@ -203,6 +336,47 @@ class GeneExpPredictor(object):
         return_w: bool = False,
         return_ada: bool = False,
     ):
+        """Diffuse spot-level signals to nuclei of the corresponding type.
+
+        Parameters
+        ----------
+        gamma
+            Weight of the soft constraint that keeps the inferred expression of
+            labelled nuclei close to the direct aggregation from the spatial
+            spots.
+        iterations
+            Maximum number of diffusion iterations performed per cell type.
+        early_stop
+            Whether to stop early when the change of the unlabelled predictions
+            falls below ``tol`` for ``patience`` consecutive iterations.
+        tol
+            Minimum relative improvement of the mean squared change required to
+            reset the patience counter during early stopping.
+        patience
+            Number of iterations that are tolerated without improvement when
+            ``early_stop`` is enabled.
+        return_w
+            If ``True``, also return the final affinity matrix used for the
+            last processed cell type.
+        return_ada
+            If ``True``, return a list of individual AnnData objects per cell
+            type instead of concatenating them.
+
+        Returns
+        -------
+        AnnData or tuple
+            The concatenated AnnData object that stores the inferred expression
+            for all processed cell types.  When ``return_w`` or ``return_ada``
+            are requested, additional values are returned as described above.
+
+        Notes
+        -----
+        The method follows the propagation scheme of the dense implementation:
+        labelled nuclei are initialised from neighbouring spots and the
+        remaining nuclei are iteratively updated using a random-walk smoothing
+        matrix.  All matrix multiplications stay within sparse space for
+        efficiency.
+        """
         if not self.ct_spot_expr:
             raise RuntimeError("请先调用 ctspecific_spot_gene_exp(...) 计算类型特异的 spot 表达。")
 
@@ -336,6 +510,20 @@ class GeneExpPredictor(object):
 # 5)（可选）一个独立的 concat 函数（若你需要在类外使用）
 # ---------------------------------------------------------------------
 def concat(ada_list: List[ad.AnnData]) -> ad.AnnData:
+    """Concatenate AnnData objects produced outside the predictor class.
+
+    Parameters
+    ----------
+    ada_list
+        Sequence of AnnData objects that share ``var_names`` and contain spatial
+        coordinates in ``.obsm['spatial']``.
+
+    Returns
+    -------
+    AnnData
+        New AnnData instance with stacked expression matrix, concatenated
+        observation names and preserved ``pred_cell_type`` annotations.
+    """
     if len(ada_list) == 0:
         return ad.AnnData(X=sp.csr_matrix((0, 0)))
     X = vstack([a.X for a in ada_list], format="csr")
