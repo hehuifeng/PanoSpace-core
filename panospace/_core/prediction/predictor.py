@@ -6,10 +6,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import TYPE_CHECKING, Tuple
-
-import numpy as np
-import pandas as pd
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from anndata import AnnData
@@ -25,7 +22,14 @@ def predictor_core(
     infered_adata: AnnData,
     celltype_list: list[str],
     celltype_column: str = "celltype_major",
-) -> Tuple[AnnData, AnnData]:
+) -> AnnData:
+    """Predict gene expression for inferred cells using the sparse backend.
+
+    Returns
+    -------
+    AnnData
+        Predicted gene expression profiles for all inferred cells.
+    """
     start_time = time.time()
 
     # 1) 初始化预测器
