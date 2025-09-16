@@ -188,7 +188,7 @@ def detect_cells_core(
     device: str = "cuda:0",
     tile_size: int = 256,
     overlap: int = 64,
-):
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Run CellViT nuclei detection on a raw image array.
 
     Automatically tiles large images patch-wise and merges results.
@@ -208,8 +208,15 @@ def detect_cells_core(
 
     Returns
     -------
-    pd.DataFrame
-        DataFrame with columns: ["cell_id", "x", "y", "morphotype"]
+    tuple[list[dict[str, Any]], list[dict[str, Any]]]
+        A pair ``(cell_dict_wsi, cell_dict_detection)``.  ``cell_dict_wsi``
+        contains one dictionary per detected cell with keys such as ``"bbox"``
+        (global bounding box), ``"centroid"`` (global centroid), ``"contour"``,
+        ``"type"``, ``"patch_coordinates"``, ``"cell_status"`` and
+        ``"offset_global"`` (plus optional ``"edge_information"`` for border
+        cases).  ``cell_dict_detection`` provides a simplified dictionary for
+        each cell containing at least ``"bbox"``, ``"centroid"`` and
+        ``"type"`` suitable for lightweight visualisation.
     """
     t0 = perf_counter()
 
@@ -257,6 +264,12 @@ def detect_cells_core(
     keep_idx=list(cleaned_cells.index.values)
     cell_dict_wsi = [cell_dict_wsi[idx_c] for idx_c in keep_idx]
     cell_dict_detection = [cell_dict_detection[idx_c] for idx_c in keep_idx]
+
+    logger.info(
+        "[CellViT] Finished inference in %.2f s (%d cells)",
+        perf_counter() - t0,
+        len(cell_dict_wsi),
+    )
 
     return cell_dict_wsi, cell_dict_detection
 
