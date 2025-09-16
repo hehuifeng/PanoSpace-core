@@ -43,29 +43,22 @@ def detect_cells(
 
     Parameters
     ----------
-    sdata
-        A :class:`spatialdata.SpatialData` object **or** a path to a directory/
-        file that can be read by :pyfunc:`panospace.io.read_visium`,
-        :pyfunc:`~panospace.io.read_xenium`, etc.
+    img
+        High-resolution tissue image as a :class:`PIL.Image.Image`.  Large
+        whole-slide images are automatically tiled before inference, so the
+        input can be the full slide or an already cropped region.
     model
-        Detection backend to use - currently ``"cellvit"`` (default) or
-        ``"stardist"``.  Additional keyword arguments are forwarded to the
-        backend implementation.
-    overwrite
-        If *False* (default) and ``'cells'`` already exists in
-        ``sdata.tables``, an exception is raised.  Set to *True* to recompute.
-    return_table
-        If *True*, only the detected *cells table* (:class:`pandas.DataFrame`)
-        is returned instead of the full ``SpatialData``.
-    **kwargs
-        Extra keyword arguments forwarded verbatim to the backend detector
-        (e.g. ``gpu=True``, ``batch_size=4``).
+        Detection backend to use - currently ``"cellvit"`` (default).  Other
+        identifiers (e.g. ``"stardist"``) are reserved for future
+        implementations.
 
     Returns
     -------
-    :class:`spatialdata.SpatialData` | :class:`pandas.DataFrame`
-        Updated object containing a new ``'cells'`` table *or* the table alone
-        if ``return_table`` is *True*.
+    list[dict[str, Any]]
+        The ``cell_dict_wsi`` output produced by the backend.  Each dictionary
+        contains the detected cell's geometry and metadata in whole-slide
+        coordinates (e.g. ``bbox``, ``centroid``, ``contour``, ``type`` and
+        patch-level bookkeeping information).
     """
 
     # ------------------------------------------------------------------
