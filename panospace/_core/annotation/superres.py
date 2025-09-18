@@ -17,10 +17,14 @@ logger = logging.getLogger(__name__)
 
 def superres_core(
     deconv_adata: ad.AnnData,
-    adata_vis: ad.AnnData,
     img_dir: str,
     neighb: int=3,
     radius: int=129,
+    class_weights=None,
+    learning_rate=1e-4,
+    local_path="~/.panospace_cache/dinov2-base",
+    pretrained_model_name="facebook/dinov2-base",
+    cache_dir="~/.panospace_cache",
     epoch: int=50,
     batch_size: int=32,
     num_workers: int=4,
@@ -30,7 +34,11 @@ def superres_core(
                                 img_dir=img_dir,
                                 radius=radius,
                                 neighb=neighb,
-                                cache_dir="~/.panospace_cache")
+                                class_weights=class_weights,
+                                learning_rate=learning_rate,
+                                local_path=local_path,
+                                pretrained_model_name=pretrained_model_name,
+                                cache_dir=cache_dir)
 
     sr_inferencer.run_train(epoch=epoch, batch_size=batch_size, num_workers=num_workers, accelerator=accelerator)
     sr_adata = sr_inferencer.run_superres()

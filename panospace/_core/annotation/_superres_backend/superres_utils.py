@@ -169,6 +169,10 @@ class DINOv2_superres_deconv(object):
                  img_dir,
                  radius=129,
                  neighb=2,
+                 class_weights=None,
+                 learning_rate=1e-4,
+                 local_path="~/.panospace_cache/dinov2-base",
+                 pretrained_model_name="facebook/dinov2-base",
                  cache_dir="~/.panospace_cache"):
         
         self.img_dir = img_dir
@@ -194,7 +198,11 @@ class DINOv2_superres_deconv(object):
             print('if use the checkpoint, do not execute run_train method')
             self.model = DINOv2NeighborClassifier.load_from_checkpoint(os.path.join(self.path,"superres_model.ckpt"),num_classes=num_classes)
         else:
-            self.model = DINOv2NeighborClassifier(num_classes=num_classes)
+            self.model = DINOv2NeighborClassifier(num_classes=num_classes,
+                                                  class_weights=class_weights,
+                                                  learning_rate=learning_rate,
+                                                  local_path=local_path,
+                                                  pretrained_model_name=pretrained_model_name)
         print('model loaded...')
         print('loading super res data')
         if not os.path.exists(os.path.join(self.path,'sr_adata.h5ad')):

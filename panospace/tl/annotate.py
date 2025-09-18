@@ -83,7 +83,7 @@ def deconv_celltype(
 
     celltype = sc_adata.obs[celltype_key].unique().tolist()
     celltype.sort()
-    adata_vis.uns["cell_type"] = celltype
+    adata_vis.uns["celltype"] = celltype
     results_list = []
     # import pdb
     for method in methods:
@@ -110,7 +110,7 @@ def deconv_celltype(
     ensemble_result = EnDecon(aligned_results)
 
     ensemble_result["H_norm"] = pd.DataFrame(
-        ensemble_result["H_norm"], index=common_index, columns=celltype_key
+        ensemble_result["H_norm"], index=common_index, columns=celltype
     )
 
     deconv_adata = adata_vis.copy()[common_index].copy()
@@ -123,12 +123,16 @@ def deconv_celltype(
 # Super-resolution refinement
 # -----------------------------------------------------------------------------
 def superres_celltype(
-    adata_vis: AnnData,
     deconv_adata: AnnData,
     img_dir: str,
     neighb: int = 3,
     radius: int = 129,
     epoch: int = 50,
+    class_weights=None,
+    learning_rate: float = 1e-4,
+    local_path: str = "~/.panospace_cache/dinov2-base",
+    pretrained_model_name: str = "facebook/dinov2-base",
+    cache_dir: str = "~/.panospace_cache",
     batch_size: int = 32,
     num_workers: int = 4,
     accelerator: Literal["cpu", "gpu"] = "gpu",
@@ -138,12 +142,10 @@ def superres_celltype(
 
     Parameters
     ----------
-    adata_vis : AnnData
-        Spatial transcriptomics AnnData object.
     deconv_adata : AnnData
         AnnData object with initial deconvolution results.
     img_dir : str
-        Path to tissue image corresponding to ``adata_vis``.
+        Path to tissue image corresponding to ``deconv_adata``.
     neighb : int, optional
         Number of neighboring spots/cells considered (default: 3).
     radius : int, optional
@@ -167,10 +169,14 @@ def superres_celltype(
 
     sr_adata = superres_fn(
         deconv_adata=deconv_adata,
-        adata_vis=adata_vis,
         img_dir=img_dir,
         neighb=neighb,
         radius=radius,
+        class_weights=class_weights,
+        learning_rate=learning_rate,
+        local_path=local_path,
+        pretrained_model_name=pretrained_model_name,
+        cache_dir=cache_dir,
         epoch=epoch,
         batch_size=batch_size,
         num_workers=num_workers,
