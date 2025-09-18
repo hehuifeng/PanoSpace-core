@@ -93,6 +93,7 @@ deconv_adata = ps.deconv_celltype(
     adata_vis=visium_adata,
     sc_adata=reference_sc,
     celltype_key="celltype_major",
+    methods=['RCTD', 'spatialDWLS', 'cell2location']
 )
 
 # 3) Super-resolve and annotate segmented cells
