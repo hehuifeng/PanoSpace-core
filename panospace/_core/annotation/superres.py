@@ -10,7 +10,6 @@ from typing import Literal
 from ._superres_backend.superres_utils import DINOv2_superres_deconv
 
 import logging
-from panospace._core import register
 
 logger = logging.getLogger(__name__)
 

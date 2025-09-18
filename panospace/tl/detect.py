@@ -2,29 +2,17 @@
 ====================
 User-facing *nuclei/cell detection* wrapper.  It delegates the heavy lifting to
 backend implementations in :pymod:`panospace._core.detection` (CellViT,
-StarDist, …) and writes the resulting cell table into the supplied
-:class:`spatialdata.SpatialData` object.
+StarDist, ...).
 
-Example
--------
->>> import panospace as ps
->>> sdata = ps.io.read_visium("/path/to/visium")
->>> sdata = ps.tl.detect_cells(sdata, model="cellvit", gpu=True)
-
-After execution the table ``sdata.tables['cells']`` will contain at least the
-columns ``['cell_id', 'x', 'y']`` as defined in :pymod:`panospace.io._schemas`.
 """
 
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 from typing import Any, Literal
 
-# import spatialdata as sdata_mod  # type: ignore - only for type checking
 from PIL import Image
 Image.MAX_IMAGE_PIXELS = 10000000000
-# from panospace.io.converters import _ensure_spatialdata  # type: ignore - private helper
 
 logger = logging.getLogger("panospace.tl")
 
@@ -78,11 +66,11 @@ def detect_cells(
     else:
         raise ValueError(f"Unknown detection model: {model!r}")
 
-    cell_dict_wsi, cell_dict_detection = _backend(img, model_name='HIPT', device='cuda', tile_size=256, overlap=64)  # type: ignore[arg-type]
+    seg_adata, contours = _backend(img, model_name='HIPT', device='cuda', tile_size=256, overlap=64)  # type: ignore[arg-type]
 
-    logger.info("Detected %d cells", len(cell_dict_wsi))
+    logger.info("Detected %d cells", len(seg_adata))
 
-    return cell_dict_wsi
+    return seg_adata, contours
 
 
 __all__ = ["detect_cells"]

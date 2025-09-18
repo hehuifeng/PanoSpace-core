@@ -1,6 +1,6 @@
 """Internal version helper for PanoSpace.
 
-This file follows the *single‑source* version pattern: the version string is
+This file follows the *single-source* version pattern: the version string is
 kept in **one** place and imported elsewhere (e.g. in ``panospace.__init__`` or
 setup metadata) to avoid mismatches.
 

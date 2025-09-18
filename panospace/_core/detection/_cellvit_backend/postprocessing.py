@@ -1050,7 +1050,7 @@ def convert_coordinates(row: pd.Series) -> pd.Series:
 
     
 class CellPostProcessor:
-    def __init__(self, cell_list: List[dict]) -> None:
+    def __init__(self, cell_list: List[dict], logger=None) -> None:
         self.cell_df = pd.DataFrame(cell_list)
         self.cell_df = self.cell_df.apply(convert_coordinates, axis=1)
         self.mid_cells = self.cell_df[
@@ -1059,6 +1059,7 @@ class CellPostProcessor:
         self.cell_df_margin = self.cell_df[
             self.cell_df["cell_status"] != 0
         ]  
+        self.logger = logger
 
     def post_process_cells(self) -> pd.DataFrame:
 
@@ -1086,7 +1087,7 @@ class CellPostProcessor:
             columns=self.cell_df_margin.columns
         )  # cells torching the border without having an overlap from other patches
 
-        for idx, cell_info in tqdm(edge_cells.iterrows()):
+        for idx, cell_info in tqdm(edge_cells.iterrows(), total=len(edge_cells)):
             edge_information = dict(cell_info["edge_information"])
             edge_patch = edge_information["edge_patches"][0]
             edge_patch = f"{edge_patch[0]}_{edge_patch[1]}"
@@ -1190,7 +1191,11 @@ class CellPostProcessor:
     def _remove_overlap(self, cleaned_edge_cells: pd.DataFrame) -> pd.DataFrame:
         merged_cells = cleaned_edge_cells.copy()
 
-        for iteration in tqdm(range(20)):
+        for iteration in range(20):
+            if self.logger is not None:
+                self.logger.info(f"Overlap removal iteration {iteration}")
+            else:
+                print(f"\rOverlap removal iteration {iteration}", end="")
             poly_list = []
             uid_list = []
 
@@ -1260,11 +1265,19 @@ class CellPostProcessor:
 
             # 如果没有重叠，提前终止
             if overlaps == 0:
+                if self.logger is not None:
+                    self.logger.info("No overlaps, stop early.")
+                else:
+                    print("\nNo overlaps, stop early.")
                 break
 
             # 生成下一轮新的 cell 表
             merged_cells = cleaned_edge_cells.loc[
                 cleaned_edge_cells.index.isin(merged_idx)
             ].sort_index()
+        if self.logger is not None:
+            self.logger.info("Overlap removal completed.")
+        else:
+            print("Overlap removal completed.")
 
         return merged_cells.sort_index()

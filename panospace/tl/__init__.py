@@ -6,7 +6,7 @@ objects or dedicated result classes.  End-users are expected to import PanoSpace
 as::
 
     >>> import panospace as ps
-    >>> cells = ps.tl.detect_cells(sdata)
+    >>> cells = ps.tl.detect_cells(img)
 
 keeping all heavy lifting hidden behind these wrappers.
 
@@ -65,7 +65,3 @@ def _import_backend(name: str):
     module_path, func_name = _BACKENDS[name].split(":")
     mod = __import__(module_path, fromlist=[func_name])
     return getattr(mod, func_name)
-
-
-
-__all__ = ["_import_backend"]

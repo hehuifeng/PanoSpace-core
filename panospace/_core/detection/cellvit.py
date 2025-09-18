@@ -20,13 +20,6 @@ import pandas as pd
 from PIL import Image
 Image.MAX_IMAGE_PIXELS = 10000000000
 
-from panospace._core import register
-# from panospace.io.adapters import _ensure_spatialdata  # type: ignore
-# from panospace.io._schemas import SCHEMA_REGISTRY
-
-if TYPE_CHECKING:
-    from spatialdata import SpatialData  # for type hints
-
 logger = logging.getLogger(__name__)
 
 
@@ -258,22 +251,29 @@ def detect_cells_core(
         cell_dict_wsi.extend(cell_dict)
         cell_dict_detection.extend(cell_detection)
     
+    logger.info("running post-processing and filtering...")
     from ._cellvit_backend.postprocessing import CellPostProcessor
-    cell_processor = CellPostProcessor(cell_list=cell_dict_wsi)
+    cell_processor = CellPostProcessor(cell_list=cell_dict_wsi, logger=logger)
     cleaned_cells= cell_processor.post_process_cells()
     keep_idx=list(cleaned_cells.index.values)
     cell_dict_wsi = [cell_dict_wsi[idx_c] for idx_c in keep_idx]
-    cell_dict_detection = [cell_dict_detection[idx_c] for idx_c in keep_idx]
+    # cell_dict_detection = [cell_dict_detection[idx_c] for idx_c in keep_idx]
+
+    centroids = np.array([cell['centroid'] for cell in cell_dict_wsi])
+    contours = [cell['contour'] for cell in cell_dict_wsi]
+    import anndata
+    seg_adata = anndata.AnnData(
+        X=np.ones((len(cell_dict_wsi), 1))
+    )
+    seg_adata.obs['type'] = [cell['type'] for cell in cell_dict_wsi]
+    seg_adata.obs['contour_id'] = range(len(cell_dict_wsi))
+    seg_adata.obsm['centroid'] = centroids
 
     logger.info(
         "[CellViT] Finished inference in %.2f s (%d cells)",
         perf_counter() - t0,
-        len(cell_dict_wsi),
+        len(seg_adata),
     )
 
-    return cell_dict_wsi, cell_dict_detection
+    return seg_adata, contours
 
-# -----------------------------------------------------------------------------
-# Register to PanoSpace detection backend
-# -----------------------------------------------------------------------------
-register("detection", "cellvit", detect_cells_core)

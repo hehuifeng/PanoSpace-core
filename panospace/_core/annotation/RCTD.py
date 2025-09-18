@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import scanpy as sc
+
 import anndata as ad
-from scipy.sparse import csr_matrix
 
 from ._RCTD_backend.RCTD_utils import *
 
 import logging
-from panospace._core import register
+
 
 logger = logging.getLogger(__name__)
 
@@ -50,5 +49,3 @@ def annotate_cells_core(
     df_normalized = df_clipped.div(row_sums, axis=0).fillna(0)
     return df_normalized
 
-# Register backend -------------------------------------------------------------
-register("annotation", "RCTD", annotate_cells_core)

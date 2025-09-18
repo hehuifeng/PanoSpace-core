@@ -9,7 +9,7 @@ from scipy.sparse import csr_matrix
 from ._spatialDWLS_backend.spatialDWLS_utils import *
 
 import logging
-from panospace._core import register
+
 
 logger = logging.getLogger(__name__)
 
@@ -89,5 +89,3 @@ def annotate_cells_core(
     results = runDWLSDeconv(expr_df=expr_df, log_expr_df=log_expr_df, cluster_info=adata_vis.obs['leiden'].tolist(), ct_exp_df=Sig_exp_df)
     return results
 
-# Register backend -------------------------------------------------------------
-register("annotation", "spatialDWLS", annotate_cells_core)

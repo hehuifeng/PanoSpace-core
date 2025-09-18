@@ -18,13 +18,8 @@ from __future__ import annotations
 
 import importlib
 import logging
-from types import ModuleType
+
 from typing import Any, Callable, Dict, TYPE_CHECKING
-
-from panospace._core import available  # creates registry on first import
-
-# if TYPE_CHECKING:  # pragma: no cover
-#     from spatialdata import SpatialData  # noqa: F401 - for type hints only
 
 logger = logging.getLogger(__name__)
 
@@ -55,16 +50,4 @@ BackendFunc = Callable[..., Any]
 # parameters are passed via *args / **kwargs and typed as ``Any`` here to avoid
 # over-constraining plugin authors.
 
-def get_available() -> Dict[str, BackendFunc]:
-    """Return a mapping of *registered* detection back-ends.
 
-    Note this may be a subset of ``_BUILTIN`` if optional dependencies are
-    missing, but can also include externally registered plug-ins.
-    """
-    return available("detection")
-
-
-__all__ = [
-    "get_available",
-    "BackendFunc",
-]

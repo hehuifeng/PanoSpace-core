@@ -23,7 +23,7 @@ import sys
 import warnings
 from importlib import metadata
 
-from . import io, tl
+from typing import TYPE_CHECKING
 # -----------------------------------------------------------------------------
 # Version
 # -----------------------------------------------------------------------------
@@ -47,20 +47,34 @@ if not _logger.handlers:
 # Optional: silence known noisy warnings from third‑party libs
 warnings.filterwarnings("ignore", category=UserWarning, module="torch")
 
-# -----------------------------------------------------------------------------
-# Lazy sub‑module loader (PEP 562)
-# -----------------------------------------------------------------------------
-__all__: list[str] = ["io", "tl", "pl", "__version__"]
 
+__all__ = [
+    "detect_cells",
+    "deconv_celltype", "superres_celltype", "celltype_annotator",
+    "genexp_predictor",
+]
 
-def __getattr__(name: str):  # noqa: D401 – simple accessor
-    """Dynamically import *io*, *tl* and *pl* only when accessed."""
-    if name in {"io", "tl", "pl"}:
-        module = importlib.import_module(f"{__name__}.{name}")
-        globals()[name] = module  # cache in module globals for next time
-        return module
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+# 给类型检查器正常导入（不影响运行时性能）
+if TYPE_CHECKING:
+    from .tl.detect import detect_cells
+    from .tl.annotate import deconv_celltype, superres_celltype, celltype_annotator
+    from .tl.predict import genexp_predictor
 
+# 运行时真正的懒加载
+def __getattr__(name: str):
+    if name == "detect_cells":
+        from .tl.detect import detect_cells
+        return detect_cells
+    if name in {"deconv_celltype", "superres_celltype", "celltype_annotator"}:
+        from .tl.annotate import deconv_celltype, superres_celltype, celltype_annotator
+        return {"deconv_celltype": deconv_celltype,
+                "superres_celltype": superres_celltype,
+                "celltype_annotator": celltype_annotator}[name]
+    if name == "genexp_predictor":
+        from .tl.predict import genexp_predictor
+        return genexp_predictor
+    raise AttributeError(f"module {__name__!r} has no attribute {name}")
 
-def __dir__() -> list[str]:  # noqa: D401 – complement built‑in dir()
-    return sorted(list(globals().keys()) + ["io", "tl", "pl"])
+def __dir__():
+    return sorted(list(globals().keys()) + __all__)
+

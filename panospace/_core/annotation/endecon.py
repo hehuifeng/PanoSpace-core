@@ -33,20 +33,9 @@ pipelines still run.
 """
 
 from __future__ import annotations
-
-import importlib
 import logging
-import time
-from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Tuple
 
 import numpy as np
-import pandas as pd
-
-from panospace._core import register
-
-if TYPE_CHECKING:  # pragma: no cover – static-type helpers only
-    from anndata import AnnData
 
 logger = logging.getLogger("panospace._core.annotation.endecon")
 
@@ -58,8 +47,6 @@ logger = logging.getLogger("panospace._core.annotation.endecon")
 #     from endecon import EnDecon  # type: ignore
 # else:
 #     logger.debug("EnDecon not available – falling back to dummy annotator.")
-
-__all__: List[str] = ["solve_ensemble"]
 
 # -----------------------------------------------------------------------------
 # Core function ----------------------------------------------------------------
@@ -162,5 +149,3 @@ def endecon_core(results_deconv, lambda_=None, prob_quantile=0.5,
 
     return {"H_norm": H_norm, "w": w}
 
-# Register backend -------------------------------------------------------------
-register("annotation", "endecon", endecon_core)

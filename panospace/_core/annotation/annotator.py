@@ -5,7 +5,6 @@ from typing import Dict
 import logging
 
 from ._annotator_backend.annotator_utils import CellTypeAnnotator
-from panospace._core import register
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +66,3 @@ def annotator_core(
     seg_adata_pred = seg_adata_pred.infer_cell_types()
 
     return seg_adata_pred
-
-# Register backend -------------------------------------------------------------
-register("annotation", "annotator", annotator_core)

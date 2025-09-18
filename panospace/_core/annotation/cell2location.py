@@ -7,7 +7,6 @@ import anndata as ad
 from scipy.sparse import csr_matrix
 
 import logging
-from panospace._core import register
 
 logger = logging.getLogger(__name__)
 
@@ -110,5 +109,3 @@ def annotate_cells_core(
 
     return adata_vis.obs[adata_vis.uns['mod']['factor_names']]
 
-# Register backend -------------------------------------------------------------
-register("annotation", "cell2location", annotate_cells_core)

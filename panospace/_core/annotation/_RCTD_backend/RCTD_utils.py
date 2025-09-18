@@ -8,11 +8,6 @@ import gzip
 
 data_type = 'float32'
 
-
-import matplotlib as mpl
-from matplotlib import rcParams
-import matplotlib.pyplot as plt
-import seaborn as sns
 import warnings
 warnings.filterwarnings('ignore')
 
