@@ -1,7 +1,6 @@
 name: PanoSpace
 channels:
   - conda-forge
-  - pytorch
   - defaults
 dependencies:
   # Python version
@@ -23,11 +22,8 @@ dependencies:
   - tqdm>=4.65
   - requests>=2.31
 
-  # === Cell detection (PyTorch ecosystem) ===
-  # NOTE: This configuration installs CPU-only PyTorch by default
-  # For GPU support, use environment-gpu.yml instead, or see README for manual setup
-  - pytorch>=2.0
-  - torchvision>=0.15
+  # === Cell detection (GPU-enabled PyTorch) ===
+  # PyTorch GPU version will be installed via pip to ensure CUDA compatibility
   - shapely>=2.0  # Geometry operations for postprocessing
 
   # === Annotation & optimization ===
@@ -43,6 +39,12 @@ dependencies:
   # === Pip-only packages (not available in conda) ===
   - pip
   - pip:
+      # PyTorch GPU (CUDA 12.x support)
+      # Uses Tsinghua mirror for faster download in China
+      # --extra-index-url https://pypi.tuna.tsinghua.edu.cn/simple
+      - torch>=2.0
+      - torchvision>=0.15
+
       # Deep learning frameworks
       - pyro-ppl>=1.8
       - pytorch-lightning>=2.1

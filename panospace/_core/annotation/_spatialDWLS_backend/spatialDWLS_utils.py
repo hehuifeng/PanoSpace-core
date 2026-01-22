@@ -7,7 +7,7 @@ def intersect(a, b):
     return list(set(a) & set(b))
 
 def row_max_indices(matrix):
-    """返回每行最大值的列索引"""
+    """Return column index of maximum value for each row."""
     return np.argmax(matrix, axis=1)
 
 def solve_OLS_internal(S, B):
@@ -15,12 +15,12 @@ def solve_OLS_internal(S, B):
     d = S.T @ B
     n = S.shape[1]
 
-    # 转换为 QP 标准形式
+    # Convert to QP standard form
     # minimize 0.5 x^T D x - d^T x  s.t. x >= 0
     G = -np.eye(n)  # -x <= 0  → x >= 0
     h = np.zeros(n)
 
-    x = solve_qp(D, -d, G, h, solver="osqp")  # 或 "cvxopt"
+    x = solve_qp(D, -d, G, h, solver="osqp")  # or "cvxopt"
     return np.clip(x, 0, None)
 
 def find_dampening_constant(S, B, gold_standard, n_iter=50):
@@ -35,7 +35,7 @@ def find_dampening_constant(S, B, gold_standard, n_iter=50):
     for j in range(1, int(np.ceil(np.log2(max_val))) + 1):
         multiplier = 2 ** (j - 1)
         ws_dampened = np.clip(ws_scaled, None, multiplier)
-        # 交叉验证
+        # Cross-validation
         scores = []
         for _ in range(n_iter):
             subset = np.random.choice(len(ws), len(ws)//2, replace=False)
@@ -63,7 +63,7 @@ def solve_dampened_WLSj(S, B, gold_standard, j):
     G = -np.eye(n)
     h = np.zeros(n)
 
-    # 归一化 (类似 R 里的 /sc)
+    # Normalize (similar to R's /sc)
     sc = np.linalg.norm(D, 2)
     x = solve_qp(D / sc, -d / sc, G, h, solver="osqp")
     return np.clip(x, 0, None)
@@ -128,7 +128,7 @@ def enrich_analysis(expr_df, sign_matrix_df):
     return pd.DataFrame(enrichment, index=filter_sig.columns, columns=expr_df.columns)
 
 def enrich_deconvolution(expr_df, log_expr_df, cluster_info, ct_exp_df, cutoff=1.0):
-    # 构建 0/1 富集矩阵
+    # Build 0/1 enrichment matrix
     enrich_matrix = pd.DataFrame(0, index=ct_exp_df.index, columns=ct_exp_df.columns)
     max_indices = row_max_indices(ct_exp_df.values)
     for i, idx in enumerate(max_indices):
@@ -137,7 +137,7 @@ def enrich_deconvolution(expr_df, log_expr_df, cluster_info, ct_exp_df, cutoff=1
     # PAGE enrichment
     enrich_result = enrich_analysis(log_expr_df, enrich_matrix)
 
-    # 初始化结果
+    # Initialize results
     dwls_results = pd.DataFrame(0, index=ct_exp_df.columns, columns=expr_df.columns)
 
     clusters = sorted(set(cluster_info))
@@ -147,7 +147,7 @@ def enrich_deconvolution(expr_df, log_expr_df, cluster_info, ct_exp_df, cutoff=1
         row_i_max = cluster_enrich.max(axis=1)
 
         ct = row_i_max[row_i_max > cutoff].index.tolist()
-        if len(ct) < 2:  # 至少两个
+        if len(ct) < 2:  # Need at least 2
             top2 = row_i_max.sort_values(ascending=False).head(2).index.tolist()
             ct = top2
 
@@ -167,11 +167,19 @@ def enrich_deconvolution(expr_df, log_expr_df, cluster_info, ct_exp_df, cutoff=1
 
 def runDWLSDeconv(expr_df, log_expr_df, cluster_info, ct_exp_df, cutoff=1.0):
     """
-    功能等价 Giotto::runDWLSDeconv
-    expr_df: 空间表达矩阵 (基因 x spot)
-    log_expr_df: 对应 log 变换矩阵 (基因 x spot)
-    cluster_info: spot 对应 cluster/region 信息 (list 或 array)
-    ct_exp_df: 细胞类型 signature matrix (基因 x 细胞类型)
-    cutoff: 富集分数阈值
+    Equivalent to Giotto::runDWLSDeconv
+
+    Parameters
+    ----------
+    expr_df : pd.DataFrame
+        Spatial expression matrix (genes x spots)
+    log_expr_df : pd.DataFrame
+        Log-transformed expression matrix (genes x spots)
+    cluster_info : list or array
+        Cluster/region information for each spot
+    ct_exp_df : pd.DataFrame
+        Cell type signature matrix (genes x cell types)
+    cutoff : float
+        Enrichment score threshold
     """
     return enrich_deconvolution(expr_df, log_expr_df, cluster_info, ct_exp_df, cutoff)

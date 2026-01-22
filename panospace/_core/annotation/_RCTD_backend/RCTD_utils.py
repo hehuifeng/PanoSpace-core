@@ -1,3 +1,4 @@
+import logging
 import pandas as pd
 import numpy as np
 import os
@@ -10,6 +11,8 @@ data_type = 'float32'
 
 import warnings
 warnings.filterwarnings('ignore')
+
+logger = logging.getLogger(__name__)
 
 
 def LoadLikelihoodTable():
@@ -46,7 +49,7 @@ def LoadLikelihoodTable():
     return Q_mat_all, X_vals_loc
 
 def run_RCTD(RCTD, Q_mat_all, X_vals_loc, doublet_mode = 'full', loggings = None):
-    print(doublet_mode)
+    logger.debug(f"doublet_mode: {doublet_mode}")
     RCTD = fitBulk(RCTD, loggings = loggings)
     RCTD = choose_sigma_c(RCTD, Q_mat_all, X_vals_loc, loggings = loggings)
     RCTD = fitPixels(RCTD, doublet_mode = doublet_mode, loggings = loggings)
@@ -228,7 +231,10 @@ def decompose_full_ray(args):
     try:
         results = solveIRWLS_weights(cell_type_profiles,bead,nUMI,OLS = OLS, constrain = constrain,
                                    verbose = verbose, n_iter = n_iter, MIN_CHANGE = MIN_CHANGE, bulk_mode = bulk_mode, loggings = loggings, likelihood_vars = likelihood_vars, solver = 'osqp')
-    except:
+    except (ImportError, RuntimeError) as e:
+        # Fallback to cvxopt solver if osqp is not available or fails
+        if verbose:
+            logger.warning(f"OSQP solver failed ({e}), falling back to cvxopt")
         results = solveIRWLS_weights(cell_type_profiles,bead,nUMI,OLS = OLS, constrain = constrain,
                                    verbose = verbose, n_iter = n_iter, MIN_CHANGE = MIN_CHANGE, bulk_mode = bulk_mode, loggings = loggings, likelihood_vars = likelihood_vars, solver = 'cvxopt')
     return results
@@ -453,7 +459,7 @@ def choose_sigma_c(RCTD, Q_mat_all, X_vals_loc,loggings = None):
             weights[i] = results[i].squeeze()
 
         prediction = RCTD['cell_type_info']['renorm']['cell_type_means'].loc[RCTD['internal_vars']['gene_list_reg'],:] @ weights.T * (puck['nUMI'].loc[fit_ind]).values.squeeze()[None,:]
-        print('Likelihood value: {}'.format(calc_log_l_vec(prediction.values.T.reshape(-1), beads.reshape(-1),likelihood_vars = likelihood_vars)))
+        logger.debug('Likelihood value: {}'.format(calc_log_l_vec(prediction.values.T.reshape(-1), beads.reshape(-1),likelihood_vars = likelihood_vars)))
         sigma_prev = sigma
         sigma = chooseSigma(prediction, beads.T, Q_mat_all, likelihood_vars['X_vals'], sigma)
         loggings.info('Sigma value: {}'.format(sigma/100))

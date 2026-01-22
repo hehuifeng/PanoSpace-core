@@ -28,35 +28,46 @@ def annotate_cells_core(
     n_genes: int = 100,
 
 ):
-    adata_vis.raw = adata_vis.copy()  # 保留原始数据
+
+    adata_vis.raw = adata_vis.copy()  # Preserve original data
+    logger.info("Preprocessing Visium data...")
     sc.pp.normalize_total(adata_vis, target_sum=target_sum)
     sc.pp.log1p(adata_vis)
     sc.pp.highly_variable_genes(adata_vis, n_top_genes=n_top_genes, flavor=flavor)
     adata_vis = adata_vis[:, adata_vis.var.highly_variable]
 
+    logger.info("Computing PCA...")
+    adata_vis.X = np.asarray(adata_vis.X)
     sc.pp.pca(adata_vis, svd_solver='arpack')
+    logger.info("Computing neighbors...")
     sc.pp.neighbors(adata_vis, n_neighbors=n_neighbors, n_pcs=n_pca)
+    logger.info("Computing UMAP...")
     sc.tl.umap(adata_vis)
+    logger.info("Computing Leiden clustering...")
     sc.tl.leiden(adata_vis, resolution=resolution)
 
+    logger.info("Preprocessing scRNA-seq reference data...")
     sc_adata.raw = sc_adata.copy()
     sc.pp.normalize_total(sc_adata, target_sum=target_sum)
     sc.pp.log1p(sc_adata)
     sc.pp.highly_variable_genes(sc_adata, n_top_genes=n_top_genes, flavor=flavor)
     sc_adata = sc_adata[:, sc_adata.var.highly_variable]
 
+    logger.info("PCA on scRNA-seq reference data...")
     sc.pp.pca(sc_adata, svd_solver='arpack')
 
-    # 加入 celltype_final 注释
+    # Add celltype_final annotation
+    logger.info("Identifying marker genes per cell type...")
     sc_adata.obs["leiden_clus"] = sc_adata.obs[celltype_key].astype(str)
     sc.tl.rank_genes_groups(
         sc_adata,
         groupby='leiden_clus',
-        method=method,  # Giotto 用 scran，这里用 wilcoxon 近似
+        method=method,  # Giotto uses scran, we use wilcoxon as approximation
         n_genes=n_genes
     )
 
-    # 提取 marker 基因
+    # Extract marker genes
+    logger.info("Extracting marker genes and computing cell-type signatures...")
     marker_df = pd.DataFrame({
         group: sc_adata.uns['rank_genes_groups']['names'][group]
         for group in sc_adata.uns['rank_genes_groups']['names'].dtype.names
@@ -66,7 +77,8 @@ def annotate_cells_core(
     norm_exp = np.expm1(sc_adata.X.toarray())
     Sig_exp = []
 
-    # 按细胞类型取均值
+    # Compute mean per cell type
+    logger.info("Computing cell-type signature expression profiles...")
     for cluster in sc_adata.obs['leiden_clus'].unique():
         cluster_mask = sc_adata.obs['leiden_clus'] == cluster
         cluster_mean = norm_exp[cluster_mask,:].mean(axis=0)
@@ -77,15 +89,17 @@ def annotate_cells_core(
                             index=sc_adata.var_names,
                             columns=sc_adata.obs['leiden_clus'].unique())
 
-    
-    # Sig_exp_df = Sig_exp_df.loc[Sig_exp_df.index.isin(Sig_scran)] # 只保留 marker 基因
+
+    # Sig_exp_df = Sig_exp_df.loc[Sig_exp_df.index.isin(Sig_scran)] # Keep only marker genes
+    logger.info("Retaining %d marker genes for deconvolution.", Sig_exp_df.shape[0])
     expr_df = pd.DataFrame(
-        adata_vis.raw.X.A if hasattr(adata_vis.raw.X, "A") else adata_vis.raw.X,  # 转换稀疏矩阵
+        adata_vis.raw.X.A if hasattr(adata_vis.raw.X, "A") else adata_vis.raw.X,  # Convert sparse matrix
         index=adata_vis.raw.obs_names,
         columns=adata_vis.raw.var_names
     ).T
     log_expr_df = adata_vis.to_df().T
 
+    logger.info("Start spatialDWLS deconvolution...")
     results = runDWLSDeconv(expr_df=expr_df, log_expr_df=log_expr_df, cluster_info=adata_vis.obs['leiden'].tolist(), ct_exp_df=Sig_exp_df)
     return results
 

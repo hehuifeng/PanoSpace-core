@@ -51,7 +51,10 @@ logger = logging.getLogger("panospace._core.annotation.endecon")
 # -----------------------------------------------------------------------------
 # Core function ----------------------------------------------------------------
 # -----------------------------------------------------------------------------
+import logging
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 def l1_norm(X, Y):
     """Compute L1 norm between two matrices"""
@@ -116,7 +119,7 @@ def endecon_core(results_deconv, lambda_=None, prob_quantile=0.5,
         if k == 1 and lambda_ is None:
             lambda_ = np.quantile(l1_distances, prob_quantile)
             if verbose:
-                print(f"Auto-selected lambda = {lambda_}")
+                logger.info(f"Auto-selected lambda = {lambda_}")
 
         # Update weights
         exp_term = np.exp(-l1_distances / lambda_)
@@ -132,8 +135,8 @@ def endecon_core(results_deconv, lambda_=None, prob_quantile=0.5,
         loss_all = loss_main + lambda_ * loss_entropy
 
         if verbose:
-            print(f"iter: {k}, loss_main: {loss_main:.4f}, loss_entropy: {loss_entropy:.4f}, "
-                  f"loss_all: {loss_all:.4f}, lambda: {lambda_:.4f}")
+            logger.info(f"iter: {k}, loss_main: {loss_main:.4f}, loss_entropy: {loss_entropy:.4f}, "
+                       f"loss_all: {loss_all:.4f}, lambda: {lambda_:.4f}")
 
         # Check convergence
         if abs(loss_all - loss_all_temp) < epsilon:

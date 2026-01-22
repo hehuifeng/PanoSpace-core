@@ -4,6 +4,7 @@
 # PanoSpace-adapted version
 # @ Fabian Hörst, modified by PanoSpace team
 
+import logging
 from collections import OrderedDict
 from dataclasses import dataclass
 from functools import partial
@@ -16,6 +17,8 @@ import torch.nn as nn
 from .backbones import ViTCellViT
 from .blocks import Conv2DBlock, Deconv2DBlock
 from .postprocessing import DetectionCellPostProcessor
+
+logger = logging.getLogger(__name__)
 
 class CellViT(nn.Module):
     """CellViT Modell for cell segmentation. U-Net like network with vision transformer as backbone encoder
@@ -549,7 +552,7 @@ class CellViT256(CellViT):
         state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
         state_dict = {k.replace("backbone.", ""): v for k, v in state_dict.items()}
         msg = self.encoder.load_state_dict(state_dict, strict=False)
-        print(f"Loading checkpoint: {msg}")
+        logger.info(f"Loading checkpoint: {msg}")
 
 # -----------------------------------------------------------------------------
 # CellViTSAM : SAM-B / SAM-L / SAM-H variant
@@ -644,7 +647,7 @@ class CellViTSAM(CellViT):
         state_dict = torch.load(str(model_path), map_location="cpu")
         image_encoder = self.encoder
         msg = image_encoder.load_state_dict(state_dict, strict=False)
-        print(f"Loading checkpoint: {msg}")
+        logger.info(f"Loading checkpoint: {msg}")
         self.encoder = image_encoder
 
     def forward(self, x: torch.Tensor, retrieve_tokens: bool = False):

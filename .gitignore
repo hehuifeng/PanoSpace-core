@@ -13,3 +13,6 @@ build/
 
 # VSCode 配置
 .vscode/
+
+.claude
+.pytest_cache/

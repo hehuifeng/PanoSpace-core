@@ -1,6 +1,9 @@
 """panospace.tl.predict
 =====================
+Gene expression prediction for spatial transcriptomics data.
 
+This module provides tools to predict spatial gene expression profiles
+from single-cell RNA-seq references, leveraging deconvolution results.
 """
 from __future__ import annotations
 
@@ -13,10 +16,10 @@ if TYPE_CHECKING:
 
 from . import _import_backend
 
-logger = logging.getLogger("panospace.tl")
+logger = logging.getLogger(__name__)
 
 # -----------------------------------------------------------------------------
-# Backend registry ----------------------------------------------------------------
+# Public API
 # -----------------------------------------------------------------------------
 def genexp_predictor(
     sc_adata: AnnData,
@@ -26,59 +29,40 @@ def genexp_predictor(
     celltype_column: str = "celltype_major",
     backend: str = "predictor",
 ) -> AnnData:
-    """
-    Predict spatial gene expression profiles from single-cell references.
+    """Predict spatial gene expression from single-cell reference.
 
-    This function leverages scRNA-seq data as a reference and integrates
-    spatial deconvolution results to reconstruct gene expression patterns
-    across spatial transcriptomics spots or subspot-resolution locations.
-
-    Workflow
-    --------
-    1. Validate input objects: reference scRNA (`sc_adata`), spatial data (`spot_adata`),
-       and inferred spatial assignments (`infered_adata`).
-    2. Select the prediction backend via :func:`_import_backend`.
-    3. Estimate cell-type-specific expression contributions and reconstruct
-       predicted gene expression matrix for each spatial location.
-    4. Return an AnnData object with the predicted expression.
+    Reconstructs gene expression patterns across spatial locations by
+    integrating scRNA-seq reference with deconvolution results.
 
     Parameters
     ----------
     sc_adata : AnnData
-        Reference single-cell RNA-seq dataset with cell-type annotations.
+        Reference single-cell RNA-seq data with cell-type annotations.
     spot_adata : AnnData
-        Spatial transcriptomics dataset (spot-level expression).
+        Spatial transcriptomics data (spot-level expression).
     infered_adata : AnnData
-        Inferred spatial decomposition results (e.g. cell-type fractions).
+        Spatial decomposition results (e.g., cell-type fractions).
     celltype_list : list of str
-        List of cell types to include in the prediction model.
+        Cell types to include in prediction.
     celltype_column : str, default="celltype_major"
-        Column name in `sc_adata.obs` that stores cell-type labels.
+        Column in `sc_adata.obs` storing cell-type labels.
     backend : {"predictor"}, default="predictor"
-        Backend implementation for prediction. Currently only supports `"predictor"`.
+        Prediction backend. Currently only `"predictor"` is supported.
 
     Returns
     -------
     AnnData
-        AnnData object containing the reconstructed spatial gene expression
-        profiles. The structure typically mirrors `spot_adata`, but with
-        predicted expression values.
+        Spatial gene expression predictions. Structure mirrors `spot_adata`
+        with predicted expression values.
 
-    Raises
-    ------
-    ValueError
-        If the specified backend is not supported or fails to initialize.
-
-    Example
-    -------
+    Examples
+    --------
     >>> import panospace as ps
-    >>> sc_ref = ps.io.to_anndata(ps.io.read_xenium("sample/xenium"))
-    >>> visium_data = ps.io.read_visium("sample/visium")
-    >>> inferred = ps.tl.annotate(sc_ref, visium_data, backend="RCTD")
-    >>> pred = ps.tl.predict.genexp_predictor(
+    >>> # After deconvolution
+    >>> pred = ps.genexp_predictor(
     ...     sc_adata=sc_ref,
     ...     spot_adata=visium_data,
-    ...     infered_adata=inferred,
+    ...     infered_adata=deconv_result,
     ...     celltype_list=["Astrocyte", "Neuron", "Oligodendrocyte"]
     ... )
     """
@@ -86,10 +70,10 @@ def genexp_predictor(
     start_time = time.time()
     logger.info(f"Starting gene expression prediction using backend '{backend}'")
 
-    # 动态加载后端实现函数（例如 predictor.py）
+    # Dynamically load backend
     backend_func = _import_backend(backend)
 
-    # 调用具体后端执行预测
+    # Execute prediction
     adata_pred = backend_func(
         sc_adata=sc_adata,
         spot_adata=spot_adata,

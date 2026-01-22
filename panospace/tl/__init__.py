@@ -1,29 +1,10 @@
-"""panospace.tl
-===============
-High-level *analysis* functions - mirroring the `scanpy.tl` naming convention -
-that operate on :class:`spatialdata.SpatialData` objects and return updated
-objects or dedicated result classes.  End-users are expected to import PanoSpace
-as::
-
-    >>> import panospace as ps
-    >>> cells = ps.tl.detect_cells(img)
-
-keeping all heavy lifting hidden behind these wrappers.
-
-The sub-modules are lazily imported so that importing ``panospace`` costs almost
-nothing until a specific function is accessed.
-"""
 from __future__ import annotations
-
-import logging
 
 from typing import Mapping
 
-logger = logging.getLogger("panospace.tl")
-
 
 _BACKENDS: Mapping[str, str] = {
-    "predictor": "panospace._core.prediction.predictor:predictor_core",
+    "predictor": "panospace._core.prediction.predictor:predictor_core", 
     "RCTD": "panospace._core.annotation.RCTD:annotate_cells_core",
     "cell2location": "panospace._core.annotation.cell2location:annotate_cells_core",
     "spatialDWLS": "panospace._core.annotation.spatialDWLS:annotate_cells_core",
@@ -32,16 +13,38 @@ _BACKENDS: Mapping[str, str] = {
     "annotator_core": "panospace._core.annotation.annotator:annotator_core",
 }
 
-# Validate backend imports during initialization
-for backend, path in _BACKENDS.items():
+# Optional: Track backend availability without failing imports
+_AVAILABLE_BACKENDS: dict[str, bool] = {}
+_BACKEND_ERRORS: dict[str, str] = {}
+
+def _check_backend_availability(backend: str, path: str) -> bool:
+    """Check if a backend is available without raising errors at import time.
+
+    Parameters
+    ----------
+    backend : str
+        Backend name.
+    path : str
+        Module path in format "module:function".
+
+    Returns
+    -------
+    bool
+        True if backend is available, False otherwise.
+    """
     try:
         module_path, func_name = path.split(":")
         mod = __import__(module_path, fromlist=[func_name])
         getattr(mod, func_name)
+        return True
     except (ImportError, AttributeError) as e:
-        logger.error(f"Failed to import backend '{backend}' from '{path}': {e}")
-        raise ImportError(f"Backend '{backend}' could not be imported. Check installation and dependencies.")
-    
+        _BACKEND_ERRORS[backend] = str(e)
+        return False
+
+# Check availability of all backends
+for backend, path in _BACKENDS.items():
+    _AVAILABLE_BACKENDS[backend] = _check_backend_availability(backend, path)
+
 def _import_backend(name: str):
     """Dynamically import a backend function by name.
 
@@ -59,9 +62,48 @@ def _import_backend(name: str):
     ------
     ValueError
         If the backend name is not registered.
+    ImportError
+        If the backend is not available due to missing dependencies.
     """
     if name not in _BACKENDS:
         raise ValueError(f"Unknown annotation backend '{name}'. Available: {list(_BACKENDS)}")
+
+    if not _AVAILABLE_BACKENDS.get(name, False):
+        error_msg = _BACKEND_ERRORS.get(name, "Unknown error")
+        raise ImportError(
+            f"Backend '{name}' is not available. This may be due to missing optional dependencies. "
+            f"Error: {error_msg}\n"
+            f"To install missing dependencies, try: pip install panospace[annotation]"
+        )
+
+    # Import the backend function
     module_path, func_name = _BACKENDS[name].split(":")
     mod = __import__(module_path, fromlist=[func_name])
     return getattr(mod, func_name)
+
+def list_available_backends() -> dict[str, bool]:
+    """
+    List all registered backends and their availability status.
+
+    Returns
+    -------
+    dict
+        Dictionary mapping backend names to availability (True/False).
+    """
+    return _AVAILABLE_BACKENDS.copy()
+
+def get_backend_error(backend: str) -> str:
+    """
+    Get the error message for a failed backend import.
+
+    Parameters
+    ----------
+    backend : str
+        Backend name.
+
+    Returns
+    -------
+    str
+        Error message, or empty string if backend is available.
+    """
+    return _BACKEND_ERRORS.get(backend, "")

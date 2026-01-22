@@ -73,10 +73,10 @@ def predictor_core(
     predictor = GeneExpPredictor(sc_adata, spot_adata, infered_adata)
 
     # Build per–cell-type spot matrices (normalised and log1p-transformed)
-    predictor.ctspecific_spot_gene_exp(celltype_list, celltype_column)
+    predictor.compute_celltype_specific_spot_expression(celltype_list, celltype_column)
 
     # Run diffusion to obtain nucleus-level expression
-    adata_pred = predictor.do_geneinfer(
+    adata_pred = predictor.infer_expression(
         gamma=0.1,      # soft constraint toward labeled initialisation
         iterations=20,  # maximum number of diffusion steps
         tol=1e-4,       # early-stopping tolerance on mean squared change

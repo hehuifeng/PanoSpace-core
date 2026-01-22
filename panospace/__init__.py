@@ -1,29 +1,9 @@
-"""
-PanoSpace
-=========
-High-resolution spatial transcriptomics analysis toolkit built for the scverse
-ecosystem.
-
-Public API
-----------
-io     : Data I/O and format adapters.
-tl     : High-level analysis functions (detect_cells, annotate_celltype, …).
-pl     : Visualization helpers for spatial maps and networks.
-
-Example
--------
->>> import panospace as ps
->>> cells = ps.tl.detect_cells(sdata)
-"""
 from __future__ import annotations
 
-import importlib
 import logging
-import sys
-import warnings
 from importlib import metadata
-
 from typing import TYPE_CHECKING
+
 # -----------------------------------------------------------------------------
 # Version
 # -----------------------------------------------------------------------------
@@ -31,36 +11,46 @@ try:
     __version__: str = metadata.version("panospace")
 except metadata.PackageNotFoundError:  # pragma: no cover
     __version__ = "0+unknown"
+# -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
-# Logging (simple stdout handler; users can customise on their side)
+# Logging Configuration
 # -----------------------------------------------------------------------------
-_logger = logging.getLogger("panospace")
-if not _logger.handlers:
-    _handler = logging.StreamHandler()
-    _handler.setFormatter(
-        logging.Formatter("[%(levelname)s] %(name)s: %(message)s")
+# Only configure logging if the user hasn't already set it up
+# This allows users to customize logging while providing sensible defaults
+if not logging.getLogger().handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
     )
-    _logger.addHandler(_handler)
-    _logger.setLevel(logging.INFO)
-
-# Optional: silence known noisy warnings from third‑party libs
-warnings.filterwarnings("ignore", category=UserWarning, module="torch")
+# -----------------------------------------------------------------------------
 
 
 __all__ = [
     "detect_cells",
     "deconv_celltype", "superres_celltype", "celltype_annotator",
     "genexp_predictor",
+    # Microenvironment analysis
+    "analyze_interaction", "compute_environment_features",
+    "correlation_analysis", "spatial_enrichment",
+    # Utility functions for system information
+    "list_available_backends", "get_backend_error",
 ]
 
-# 给类型检查器正常导入（不影响运行时性能）
+
 if TYPE_CHECKING:
     from .tl.detect import detect_cells
     from .tl.annotate import deconv_celltype, superres_celltype, celltype_annotator
     from .tl.predict import genexp_predictor
+    from .tl.microenv import (
+        analyze_interaction,
+        compute_environment_features,
+        correlation_analysis,
+        spatial_enrichment,
+    )
 
-# 运行时真正的懒加载
+
 def __getattr__(name: str):
     if name == "detect_cells":
         from .tl.detect import detect_cells
@@ -73,6 +63,24 @@ def __getattr__(name: str):
     if name == "genexp_predictor":
         from .tl.predict import genexp_predictor
         return genexp_predictor
+    if name == "analyze_interaction":
+        from .tl.microenv import analyze_interaction
+        return analyze_interaction
+    if name == "compute_environment_features":
+        from .tl.microenv import compute_environment_features
+        return compute_environment_features
+    if name == "correlation_analysis":
+        from .tl.microenv import correlation_analysis
+        return correlation_analysis
+    if name == "spatial_enrichment":
+        from .tl.microenv import spatial_enrichment
+        return spatial_enrichment
+    if name == "list_available_backends":
+        from .tl import list_available_backends
+        return list_available_backends
+    if name == "get_backend_error":
+        from .tl import get_backend_error
+        return get_backend_error
     raise AttributeError(f"module {__name__!r} has no attribute {name}")
 
 def __dir__():

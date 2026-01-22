@@ -1,156 +1,207 @@
 # PanoSpace
 
-High-resolution single-cell insight from low-resolution spatial transcriptomics.
+**High-resolution single-cell insight from low-resolution spatial transcriptomics**
 
 ![PanoSpace overview](figures/fig1.png)
 
-PanoSpace bridges the gap between spot-based spatial transcriptomics (e.g. 10x
+PanoSpace bridges the gap between spot-based spatial transcriptomics (e.g., 10x
 Visium) and single-cell resolution. It combines histology-guided cell detection,
-transcriptomic deconvolution, deep-learning-based super-resolution and
-expression prediction to generate consistent cell-level maps across an entire
-tissue section.
+transcriptomic deconvolution, deep-learning-based super-resolution, expression
+prediction, and microenvironment analysis to generate consistent cell-level maps
+across entire tissue sections.
 
-## Why PanoSpace?
 
-- **Spot-to-cell reconstruction** – detect nuclei from whole-slide images and
-  register them with the Visium grid.
-- **Ensemble cell-type deconvolution** – run multiple backends (RCTD,
-  cell2location, spatialDWLS) and fuse their outputs with the EnDecon ensemble.
-- **Image-aware super resolution** – refine cell-type assignments with a
-  DINOv2-based contextual classifier and assign labels to segmented cells.
-- **Gene expression projection** – diffuse cell-type specific expression from
-  spots to detected cells using graph-aware propagation.
-- **Modular design** – each step is exposed through ``panospace.tl`` wrappers so
-  workflows can be scripted or combined with the broader `scverse` ecosystem.
+## 📦 Installation
 
-## Installation
+### System Requirements
 
-PanoSpace targets **Python 3.9+**. The base installation provides the high-level
-API; optional extras pull in heavier dependencies such as PyTorch-based models
-or Gurobi.
+- **OS**: Linux (strongly recommended)
+- **GPU**: NVIDIA GPU with CUDA support (strongly recommended for performance)
 
-### Install from PyPI (coming soon)
+### Installation
 
-```bash
-pip install panospace
-```
-
-### Install from source
-
+**Option 1: Automatic (Recommended)**
 ```bash
 git clone https://github.com/hehuifeng/PanoSpace.git
 cd PanoSpace
-pip install .
+bash install.sh
 ```
+The script will automatically detect your GPU and install the GPU-enabled version.
 
-Append extras to enable specific backends:
-
+**Option 2: Manual**
 ```bash
-# install everything required for end-to-end processing
-pip install .[cellvit,annotation,prediction]
-
-# or pick only what you need, e.g. CellViT-based detection
-pip install .[cellvit]
-```
-
-Available extras:
-
-| Extra          | Main dependencies (highlights)                      | Purpose                                      |
-| -------------- | --------------------------------------------------- | -------------------------------------------- |
-| ``cellvit``    | ``torch``, ``torchvision``, ``opencv-python``, ``ray`` | CellViT nuclei/cell detection backend        |
-| ``annotation`` | ``scanpy``, ``anndata``, ``pytorch-lightning``, ``pot`` | Deconvolution, super-resolution, annotation |
-| ``prediction`` | ``scipy`` (included via the base requirements)      | Gene expression diffusion utilities          |
-
-> The default installation already pulls these dependencies to keep the full pipeline working out of the box. Extras simply group
-> them so that environment managers (e.g. Conda, pip-tools) can reference the relevant feature set explicitly.
-> **Gurobi:** ``annotation`` installs hooks for the optional MILP solver. You
-> must obtain a license (free for academics) and follow [Gurobi's
-> instructions](https://www.gurobi.com/academia/academic-program-and-licenses/)
-> to activate it.
-
-### Development environment
-
-A ready-to-use Conda specification is available:
-
-```bash
-conda env create -f environment.yml
+conda env create -f environment-gpu.yml
 conda activate PanoSpace
-pip install -e .[cellvit,annotation,prediction]
+pip install -e .
 ```
 
-## Quick start
+**Verify Installation**
+```bash
+python -c "import panospace as ps; print('PanoSpace installed successfully!')"
+```
+
+<details>
+<summary><b>Optional: Optimization Solvers (Click to expand)</b></summary>
+
+#### Optimization Solvers for Cell Annotation
+
+PanoSpace uses **Mixed Integer Linear Programming (MILP)** solvers for accurate cell-type annotation with spot-level quota constraints. Two solvers are supported:
+
+**Supported Solvers:**
+
+1. **Gurobi** (Recommended, Commercial but Free for Academia)
+   - Significantly faster (10-100x speedup on large datasets)
+   - Best for production use and large-scale analyses
+   - Free academic license available at: https://www.gurobi.com/academia/academic-program-and-licenses/
+
+2. **SCIP** (Open-Source, Default)
+   - Automatically installed with PanoSpace
+   - Produces mathematically identical results to Gurobi
+   - Suitable for small to medium datasets
+   - No additional setup required
+
+**Solver Selection Logic:**
+
+PanoSpace automatically selects the best available solver:
+- If **Gurobi is installed** → Uses Gurobi (fastest)
+- If **Gurobi is not available** → Uses SCIP (open-source fallback)
+
+Both solvers implement the **same mathematical model** with:
+- Global cell-type quotas
+- Spot-level quota constraints (ensures consistency within each spot)
+- Exact 0/1 assignment (no approximation)
+
+**Installation:**
+
+**SCIP** (installed by default):
+```bash
+# Already included in environment.yml
+conda activate PanoSpace
+```
+
+**Gurobi** (optional, recommended for better performance):
+```bash
+# Install Gurobi
+conda install -c conda-forge gurobipy
+
+# Request free academic license at: https://www.gurobi.com/academia/academic-program-and-licenses/
+# Follow Gurobi's instructions to activate the license
+
+# Verify installation
+python -c "import gurobipy; print('Gurobi installed successfully!')"
+```
+
+*Note: Based on our experience, Gurobi typically solves problems in under 1 minute, while SCIP may take hundreds of minutes for the same problem.*
+
+
+
+</details>
+
+## 🚀 Quick Start
+
+### Basic Workflow
 
 ```python
 import panospace as ps
 from PIL import Image
 
-# 1) Detect cells on a whole-slide image
+# 1. Detect cells from tissue image
 tissue = Image.open("path/to/visium_slide.tif")
-seg_adata, contours = ps.detect_cells(tissue, model="cellvit")
+seg_adata, contours = ps.detect_cells(tissue, model="cellvit", gpu=True)
 
-# 2) Deconvolve Visium spots using multiple backends and ensemble integration
+# 2. Deconvolve Visium spots
+#    visium_adata: AnnData with .X (expression) and .obsm['spatial'] (coordinates)
+#    sc_reference: AnnData with .X and .obs[celltype_key] (cell type labels)
 deconv_adata = ps.deconv_celltype(
     adata_vis=visium_adata,
-    sc_adata=reference_sc,
-    celltype_key="celltype_major",
+    sc_adata=sc_reference,
+    celltype_key="celltype_major",  # Column name in sc_reference.obs
     methods=['RCTD', 'spatialDWLS', 'cell2location']
 )
 
-# 3) Super-resolve and annotate segmented cells
+# 3. Super-resolve to cell level
 sr_adata = ps.superres_celltype(
     deconv_adata=deconv_adata,
-    img_dir="path/to/visium_slide.tif",
+    img_dir="path/to/visium_slide.tif"
 )
-annotated_seg = ps.celltype_annotator(
-    decov_adata=deconv_adata,
+
+# 4. Annotate segmented cells
+annotated_adata = ps.celltype_annotator(
+    decov_adata=visium_adata,
     sr_deconv_adata=sr_adata,
-    seg_adata=seg_adata,
+    seg_adata=seg_adata
 )
 
-# 4) Predict cell-level expression profiles
-expr = ps.genexp_predictor(
-    sc_adata=reference_sc,
+# 5. Predict gene expression
+pred_adata = ps.genexp_predictor(
+    sc_adata=sc_reference,
     spot_adata=visium_adata,
-    infered_adata=annotated_seg,
-    celltype_list=list(reference_sc.obs["celltype_major"].unique()),
+    infered_adata=annotated_adata,
+    celltype_list=list(sc_reference.obs["celltype_major"].unique())
 )
 ```
 
-Each function returns an ``AnnData`` object (or tuple) ready for downstream
-analysis and visualization.
 
-## Repository layout
+### Cell-Cell Interaction Analysis
 
-```
-panospace/              # Python package
-├── tl/                 # User-facing tools (detect, annotate, predict)
-├── _core/              # Backend implementations (CellViT, EnDecon, etc.)
-├── _utils/             # Shared helpers
-└── _version.py         # Single-source version string
+```python
+# Analyze interactions between cell pairs
+pairs = [('Cancer_epithelial', 'CAF'), ('T_cell', 'Macrophage')]
+results = ps.analyze_interaction(
+    adata=annotated_adata,
+    cell_type_pairs=pairs,
+    cell_type_col='pred_cell_type',  # Column in adata.obs
+    radius=100.0  # Neighborhood radius (same units as spatial coordinates)
+)
 
-demo/                   # Jupyter notebooks reproducing the paper analyses
-figures/                # Figures used in the documentation
-tests/                  # Unit tests and regression checks
-```
+# Extract results and find correlated genes
+expr_df, target_abundance, _ = results[('Cancer_epithelial', 'CAF')]
+corr_results = ps.correlation_analysis(expr_df, target_abundance)
+significant_genes = corr_results.query('p_adjust < 0.05')['gene'].tolist()
 
-## Reproducibility
-
-The ``demo`` directory contains notebooks to reproduce the main figures in the
-paper, including:
-
-- [10x Visium breast cancer dataset](demo/Visium_Breast_Reproducibility.ipynb)
-- [10x Visium adult mouse olfactory bulb dataset](demo/Visium_bulb_Reproducibility.ipynb)
-
-## Contributing
-
-We welcome pull requests and bug reports. Please ensure new code is covered by
-unit tests and run the test-suite before submitting:
-
-```bash
-pytest
+# Functional enrichment
+if len(significant_genes) > 0:
+    go_results = ps.spatial_enrichment(
+        gene_list=significant_genes,
+        organism='Human',
+        gene_sets='GO_Biological_Process_2021'
+    )
 ```
 
-## Contact
+### Data Requirements
 
-For questions or collaboration opportunities please contact Hui-Feng He
-(<huifeng@mails.ccnu.edu.cn>) or Prof. Xiao-Fei Zhang (<zhangxf@ccnu.edu.cn>).
+**Visium Data** (`visium_adata`)
+- AnnData object with `.X` (gene expression) and `.obsm['spatial']` (coordinates)
+
+**Single-Cell Reference** (`sc_reference`)
+- AnnData object with `.X` and `.obs[celltype_key]` (cell type labels)
+- Minimum 100 cells per type, genes should overlap with Visium data
+
+**Histology Image**
+- TIFF/PNG/JPEG format, 40x+ magnification recommended
+
+
+
+## 📖 Citation
+
+If you use PanoSpace in your research, please cite:
+
+He, HF., Peng, P., Yang, ST. et al. Unlocking single-cell level and continuous whole-slide insights in spatial transcriptomics with PanoSpace. *Nat Comput Sci* (2026). https://doi.org/10.1038/s43588-025-00938-y
+
+
+## 📧 Contact
+
+For questions or collaboration opportunities:
+
+- **Hui-Feng He** (<huifeng@mails.ccnu.edu.cn>)
+- **Xiao-Fei Zhang** (<zhangxf@ccnu.edu.cn>)
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+
+---
+
+**Note:** PanoSpace is actively under development. API changes may occur between
+versions. Please check the changelog when upgrading.

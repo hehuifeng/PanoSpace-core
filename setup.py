@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from itertools import chain
 from pathlib import Path
 
 from setuptools import find_packages, setup
@@ -13,10 +12,7 @@ README = (BASE_DIR / "README.md").read_text(encoding="utf8")
 # ---------------------------------------------------------------------------
 # Version
 # ---------------------------------------------------------------------------
-# Keep a single source of truth for the version.  ``panospace._version`` uses
-# importlib.metadata to determine the version at runtime, but during ``setup``
-# we explicitly set it here to avoid the "0+unknown" fallback.
-VERSION = "0.1.0"
+VERSION = "1.0.0"
 
 # ---------------------------------------------------------------------------
 # Dependency groups
@@ -26,7 +22,10 @@ BASE_REQUIREMENTS = [
     "pandas>=1.5",
     "anndata>=0.10",
     "scanpy>=1.9",
+    "python-igraph>=0.10",  # Required for Leiden clustering in spatialDWLS
+    "leidenalg>=0.9",  # Leiden clustering algorithm
     "scipy>=1.9",
+    "scikit-learn>=1.2",
     "tqdm>=4.65",
     "Pillow>=9.4",
     "opencv-python>=4.8",
@@ -48,30 +47,41 @@ ANNOTATION_REQUIREMENTS = [
     "pytorch-lightning>=2.1",
     "lightning>=2.1",
     "transformers>=4.33",
-    "gurobipy>=10",
+    "scvi-tools>=1.0",  # for cell2location backend
+    "ortools>=9.0",  # open-source optimization (alternative to gurobipy)
+    "gurobipy>=10",  # optional commercial solver (free academic license available)
+]
+
+CELLVIT_REQUIREMENTS = [
+    "torch>=2.0",
+    "torchvision>=0.15",
+    "einops>=0.6",  # tensor operations
+    "shapely>=2.0",  # geometry operations for postprocessing
+]
+
+MICROENV_REQUIREMENTS = [
+    "gseapy>=1.0",
+    "statsmodels>=0.14",
 ]
 
 PREDICTION_REQUIREMENTS: list[str] = []  # scipy already covered above
 
 EXTRAS_REQUIRE = {
-    "cellvit": sorted(set(BASE_REQUIREMENTS + CELLVIT_REQUIREMENTS)),
-    "annotation": sorted(set(BASE_REQUIREMENTS + ANNOTATION_REQUIREMENTS)),
-    "prediction": sorted(set(BASE_REQUIREMENTS + PREDICTION_REQUIREMENTS)),
+    "cellvit": CELLVIT_REQUIREMENTS,
+    "annotation": ANNOTATION_REQUIREMENTS,
+    "prediction": PREDICTION_REQUIREMENTS,
+    "microenv": MICROENV_REQUIREMENTS,
 }
 
-ALL_OPTIONAL = sorted({
-    requirement
-    for requirement in chain.from_iterable(EXTRAS_REQUIRE.values())
-})
+ALL_OPTIONAL = sorted(set(
+    CELLVIT_REQUIREMENTS +
+    ANNOTATION_REQUIREMENTS +
+    PREDICTION_REQUIREMENTS +
+    MICROENV_REQUIREMENTS
+))
 EXTRAS_REQUIRE["all"] = ALL_OPTIONAL
-EXTRAS_REQUIRE["dev"] = sorted({
-    "black>=24.3",
-    "pre-commit>=3.5",
-    "pytest>=7.4",
-    "pytest-cov>=4.1",
-})
 
-INSTALL_REQUIRES = ALL_OPTIONAL
+INSTALL_REQUIRES = BASE_REQUIREMENTS
 
 # ---------------------------------------------------------------------------
 # Setup metadata

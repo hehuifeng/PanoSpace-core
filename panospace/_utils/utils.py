@@ -87,7 +87,7 @@ def radius_membership_sparse(
            [0, 0, 0]], dtype=int8)
     """
     if metric not in ("euclidean", "chebyshev"):
-        raise ValueError("metric 只能是 'euclidean' 或 'chebyshev'")
+        raise ValueError("metric must be 'euclidean' or 'chebyshev'")
 
     base_points = np.ascontiguousarray(base_points, dtype=np.float64)
     query_points = np.ascontiguousarray(query_points, dtype=np.float64)
@@ -97,14 +97,14 @@ def radius_membership_sparse(
 
     tree = KDTree(base_points, leaf_size=leaf_size, metric=metric)
 
-    # 将 r 规范为数组（便于分块）
+    # Normalize r to array format (for chunking)
     if np.isscalar(r):
         r_arr = None
         r_scalar = float(r)
     else:
         r = np.asarray(r, dtype=np.float64)
         if r.shape != (n_query,):
-            raise ValueError("当 r 为数组时，形状必须是 (n_query,)")
+            raise ValueError("when r is an array, its shape must be (n_query,)")
         r_arr = r
         r_scalar = None
 

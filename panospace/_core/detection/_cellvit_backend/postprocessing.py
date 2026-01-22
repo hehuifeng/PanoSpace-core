@@ -6,6 +6,7 @@
 #
 # @ PanoSpace adaptation
 
+import logging
 from typing import List, Tuple, Dict
 from os import environ
 
@@ -17,6 +18,8 @@ import torch.nn.functional as F
 from einops import rearrange
 import ray
 from tqdm import tqdm
+
+logger = logging.getLogger(__name__)
 
 from numba import jit
 from scipy.ndimage import binary_fill_holes, measurements
@@ -947,12 +950,12 @@ def process_cell_instance(
     all_cell_dicts = []
     all_cell_detections = []
     for cell in instance_types.values():
-        # 计算全局坐标
+        # Calculate global coordinates
         centroid_global = cell['centroid'] + np.flip(offset_global)
         contour_global = cell['contour'] + np.flip(offset_global)
         bbox_global = cell['bbox'] + offset_global
 
-        # 构建细胞信息字典
+        # Build cell information dictionary
         cell_dict = {
             'bbox': bbox_global.tolist(),
             'centroid': centroid_global.tolist(),
@@ -964,7 +967,7 @@ def process_cell_instance(
         }
 
 
-        # 如果 bbox 超出 patch 范围，标记为边界细胞
+        # If bbox extends beyond patch, mark as boundary cell
         if np.max(cell['bbox']) == tile_size or np.min(cell['bbox']) == 0:
             position = get_cell_position(cell['bbox'], tile_size)
             cell_dict["edge_position"] = True
@@ -974,7 +977,7 @@ def process_cell_instance(
         else:
             cell_dict["edge_position"] = False
 
-        # 构建检测相关的简单信息字典
+        # Build simple detection information dictionary
         cell_detection = {
             "bbox": bbox_global.tolist(),
             "centroid": centroid_global.tolist(),
@@ -983,7 +986,7 @@ def process_cell_instance(
         all_cell_dicts.append(cell_dict)
         all_cell_detections.append(cell_detection)
 
-    # 返回所有细胞的信息列表
+    # Return list of all cell information
     return all_cell_dicts, all_cell_detections
 
 
@@ -1199,12 +1202,12 @@ class CellPostProcessor:
             poly_list = []
             uid_list = []
 
-            # 构造 polygon 和其 uid 列表
+            # Build polygon and uid lists
             for idx, cell_info in merged_cells.iterrows():
                 contour = np.asarray(cell_info["contour"])
 
                 if contour.ndim != 2 or contour.shape[1] != 2 or len(contour) < 4:
-                    continue  # 非法或太小 contour 忽略
+                    continue  # Skip invalid or too small contours
 
                 try:
                     poly = Polygon(contour)
@@ -1222,10 +1225,10 @@ class CellPostProcessor:
                 uid_list.append(idx)
 
             if not poly_list:
-                break  # 没有合法 polygon，直接结束
+                break  # No valid polygons, stop
 
             tree = strtree.STRtree(poly_list)
-            uid_by_geom = dict(zip(tree.geometries, uid_list))  # 通过 .geometries 建立 uid 映射
+            uid_by_geom = dict(zip(tree.geometries, uid_list))  # Build uid mapping via .geometries
 
             merged_idx = deque()
             iterated_uids = set()
@@ -1257,27 +1260,21 @@ class CellPostProcessor:
                 if not submergers:
                     merged_idx.append(query_uid)
                 else:
-                    # 合并策略：保留最大面积那个
+                    # Merge strategy: keep the one with largest area
                     selected_uid = max(submergers, key=lambda x: x[1].area)[0]
                     merged_idx.append(selected_uid)
 
                 iterated_uids.add(query_uid)
 
-            # 如果没有重叠，提前终止
+            # If no overlaps, stop early
             if overlaps == 0:
-                if self.logger is not None:
-                    self.logger.info("No overlaps, stop early.")
-                else:
-                    print("\nNo overlaps, stop early.")
+                logger.info("No overlaps, stop early.")
                 break
 
-            # 生成下一轮新的 cell 表
+            # Generate next round cell table
             merged_cells = cleaned_edge_cells.loc[
                 cleaned_edge_cells.index.isin(merged_idx)
             ].sort_index()
-        if self.logger is not None:
-            self.logger.info("Overlap removal completed.")
-        else:
-            print("Overlap removal completed.")
+        logger.info("Overlap removal completed.")
 
         return merged_cells.sort_index()

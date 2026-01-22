@@ -1,4 +1,5 @@
 import os
+import logging
 import cv2
 import numpy as np
 import scanpy as sc
@@ -18,6 +19,8 @@ from torch.optim import Adam
 from torch.utils.data import Dataset, DataLoader
 import pytorch_lightning as pl
 
+logger = logging.getLogger(__name__)
+
 
 from transformers import AutoModel
 from torchvision import transforms
@@ -30,7 +33,7 @@ class CacheManager:
         os.makedirs(self.base_dir, exist_ok=True)
 
     def compute_cache_id(self, img_path, params: dict):
-        # 生成唯一 hash
+        # Generate unique hash
         key_str = json.dumps({"img_path": img_path, **params}, sort_keys=True)
         return hashlib.sha1(key_str.encode()).hexdigest()[:12]
 
@@ -109,16 +112,16 @@ class DINOv2NeighborClassifier(pl.LightningModule):
         # 1. Try loading from local path
         try:
             model = AutoModel.from_pretrained(local_path, local_files_only=True)
-            print(f"[INFO] Successfully loaded DINOv2 from local path: {local_path}")
+            logger.info(f"Successfully loaded DINOv2 from local path: {local_path}")
             return model
         except Exception as e_local:
-            print(f"[WARN] Failed to load DINOv2 locally: {e_local}")
+            logger.warning(f"Failed to load DINOv2 locally: {e_local}")
 
         # 2. Try downloading from Hugging Face
         try:
-            print(f"[INFO] Attempting to download DINOv2 model from Hugging Face: {pretrained_model_name}")
+            logger.info(f"Attempting to download DINOv2 model from Hugging Face: {pretrained_model_name}")
             model = AutoModel.from_pretrained(pretrained_model_name)
-            print(f"[INFO] Successfully downloaded DINOv2 from Hugging Face")
+            logger.info("Successfully downloaded DINOv2 from Hugging Face")
             return model
         except Exception as e_remote:
             raise RuntimeError(
@@ -194,17 +197,21 @@ class DINOv2_superres_deconv(object):
         self.neighb = neighb
 
         if os.path.exists(os.path.join(self.path,"superres_model.ckpt")):
-            print('the checkpoint exists, loading the checkpoint...')
-            print('if use the checkpoint, do not execute run_train method')
+            logger.info("Checkpoint exists in %s, loading from checkpoint...", self.path)
+            logger.info("If using checkpoint, run_train method will be skipped.")
+            logger.info("If you want to retrain, please delete the checkpoint file first.")
+            self.run_train = False
             self.model = DINOv2NeighborClassifier.load_from_checkpoint(os.path.join(self.path,"superres_model.ckpt"),num_classes=num_classes)
         else:
+            logger.info("Initializing new model...")
+            self.run_train = True
             self.model = DINOv2NeighborClassifier(num_classes=num_classes,
                                                   class_weights=class_weights,
                                                   learning_rate=learning_rate,
                                                   local_path=local_path,
                                                   pretrained_model_name=pretrained_model_name)
-        print('model loaded...')
-        print('loading super res data')
+        logger.info("Model loaded...")
+        logger.info("Loading super-res data")
         if not os.path.exists(os.path.join(self.path,'sr_adata.h5ad')):
             self.sr_adata = self.make_sr_datalist()
             self.sr_adata.write(os.path.join(self.path,'sr_adata.h5ad'))
@@ -212,34 +219,34 @@ class DINOv2_superres_deconv(object):
             self.sr_adata = sc.read(os.path.join(self.path,'sr_adata.h5ad'))
 
     def make_sr_datalist(self):
-        # 提取参数
+        # Extract parameters
         r = self.deconv_adata.uns['radius']
         spot_centers = self.deconv_adata.obsm['spatial']
 
-        # 构建更高分辨率的网格坐标（subspot）
+        # Build higher resolution grid coordinates (subspots)
         axis_x = range(spot_centers[:, 0].min().astype(int),
                     spot_centers[:, 0].max().astype(int), r)
         axis_y = range(spot_centers[:, 1].min().astype(int),
                     spot_centers[:, 1].max().astype(int), r)
         subspot_centers = np.array([*product(axis_x, axis_y)])
 
-        # 读取图像并获取组织轮廓 mask
+        # Load image and get tissue contour mask
         img = np.array(Image.open(self.img_dir))
-        cnt = cv2_detect_contour(img)  # 需保证返回格式为符合 cv2.drawContours 的格式
+        cnt = cv2_detect_contour(img)  # Must return format compatible with cv2.drawContours
         mask = np.zeros((img.shape[0], img.shape[1]), dtype=np.uint8)
         _ = cv2.drawContours(mask, [cnt], contourIdx=-1, color=255, thickness=-1)
-        mask = (mask > 0)  # bool 型掩膜
+        mask = (mask > 0)  # Boolean mask
 
-        # 过滤 subspot：去除掩膜外的点 + 超出图像边界的点
+        # Filter subspots: remove points outside mask and beyond image boundaries
         valid_centers = []
         for x, y in subspot_centers:
             if 0 <= x < mask.shape[1] and 0 <= y < mask.shape[0]:
-                if mask[y, x]:  # 注意：行是 y，列是 x
+                if mask[y, x]:  # Note: row is y, column is x
                     valid_centers.append((x, y))
 
         subspot_centers = np.array(valid_centers)
 
-        # 构建高分辨 AnnData（表达矩阵初始化为全 0）
+        # Build high-res AnnData (expression matrix initialized to zeros)
         sr_adata = ad.AnnData(np.zeros((subspot_centers.shape[0], 1)))
         sr_adata.obsm['spatial'] = subspot_centers
 
@@ -290,7 +297,8 @@ class DINOv2_superres_deconv(object):
 
         dataloader = DataLoader(dataset, batch_size=256, num_workers=4)
         predict = self.pred(dataloader)
-        # print(predict)
+        # Assign predictions to AnnData
+        logger.info(f"Assigning predictions to AnnData with shape {predict.shape}")
         self.sr_adata.obs[self.cell_type_name] = predict
 
         return self.sr_adata
@@ -388,7 +396,7 @@ def cv2_detect_contour(
 	elif len(img.shape)==2:
 		gray=(img*((1, 255)[np.max(img)<=1])).astype(np.uint8)
 	else:
-		print("Image format error!")
+		logger.error("Image format error!")
 	edges = cv2.Canny(gray, CANNY_THRESH_1, CANNY_THRESH_2,apertureSize = apertureSize, L2gradient = L2gradient)
 	edges = cv2.dilate(edges, None)
 	edges = cv2.erode(edges, None)

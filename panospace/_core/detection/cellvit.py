@@ -52,7 +52,7 @@ def _lazy_detector():
             self.model_name = model_name.upper()
 
             if self.model_name == "SAM":
-                model_path = cache_cellvit_sam(logger=logger)  # 如果有 logger 可以传入
+                model_path = cache_cellvit_sam(logger=logger)  # logger is optional
             elif self.model_name == "HIPT":
                 model_path = cache_cellvit_256(logger=logger)
             else:
@@ -153,7 +153,7 @@ def _simple_tiler(img: np.ndarray, tile_size: int, overlap: int):
 
 
 def _simple_tiler_pil(img: Image.Image, tile_size: int, overlap: int):
-    W, H = img.size  # 注意 PIL 是 (宽, 高)
+    W, H = img.size  # PIL size is (width, height)
     stride = tile_size - overlap
 
     for y0 in range(0, H, stride):
@@ -162,7 +162,7 @@ def _simple_tiler_pil(img: Image.Image, tile_size: int, overlap: int):
             y1 = min(y0 + tile_size, H)
             tile = img.crop((x0, y0, x1, y1))
 
-            # 补白（右下角超出图像边界的情况）
+            # Pad if tile extends beyond image boundary
             if tile.size != (tile_size, tile_size):
                 padded = Image.new(img.mode, (tile_size, tile_size), color=(255, 255, 255))
                 padded.paste(tile, (0, 0))
@@ -229,10 +229,10 @@ def detect_cells_core(
     dfs = []
     # print('img size:', img.shape)
     cell_dict_wsi=[]
-    cell_dict_detection=[]  
+    cell_dict_detection=[]
     from ._cellvit_backend.postprocessing import process_cell_instance
 
-    # 预先计算分块总数
+    # Pre-compute total number of tiles
     W, H = img.size
     stride = tile_size - overlap
     n_cols = int(np.ceil((W - tile_size) / stride)) + 1
@@ -265,9 +265,9 @@ def detect_cells_core(
     seg_adata = anndata.AnnData(
         X=np.ones((len(cell_dict_wsi), 1))
     )
-    seg_adata.obs['type'] = [cell['type'] for cell in cell_dict_wsi]
+    seg_adata.obs['img_type'] = [cell['type'] for cell in cell_dict_wsi]
     seg_adata.obs['contour_id'] = range(len(cell_dict_wsi))
-    seg_adata.obsm['centroid'] = centroids
+    seg_adata.obsm['spatial'] = centroids
 
     logger.info(
         "[CellViT] Finished inference in %.2f s (%d cells)",
