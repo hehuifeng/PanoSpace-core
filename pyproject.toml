@@ -47,9 +47,6 @@ include-package-data = true
 [tool.setuptools.packages.find]
 exclude = ["tests", "tests.*"]
 
-[tool.setuptools.package-data]
-"panospace._core.annotation._RCTD_backend" = ["extdata/*.txt", "extdata/*.txt.gz"]
-
 # Development tools configuration (optional)
 # Uncomment if you add tests later
 # [tool.pytest.ini_options]
