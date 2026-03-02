@@ -24,10 +24,8 @@ dependencies:
   - requests>=2.31
 
   # === Cell detection (PyTorch ecosystem) ===
-  # NOTE: This configuration installs CPU-only PyTorch by default
-  # For GPU support, use environment-gpu.yml instead, or see README for manual setup
-  - pytorch>=2.0
-  - torchvision>=0.15
+  # NOTE: PyTorch will be installed via pip AFTER conda environment setup
+  # This configuration is for CPU-only or manual GPU setup
   - shapely>=2.0  # Geometry operations for postprocessing
 
   # === Annotation & optimization ===
@@ -41,8 +39,13 @@ dependencies:
   - statsmodels>=0.14
 
   # === Pip-only packages (not available in conda) ===
+  # IMPORTANT: PyTorch is NOT included here - it will be installed separately
   - pip
   - pip:
+      # JAX for scvi-tools (version must be compatible)
+      - jax==0.4.27
+      - jaxlib==0.4.27
+
       # Deep learning frameworks
       - pyro-ppl>=1.8
       - pytorch-lightning>=2.1
@@ -54,6 +57,6 @@ dependencies:
       - einops>=0.6  # Tensor operations for cell detection
       - gseapy>=1.0  # Microenvironment analysis (not in conda)
 
-      # Optimization (both included for flexibility)
-      - ortools>=9.0  # Open-source optimization solver
-      - gurobipy>=10  # Commercial solver (free academic license)
+      # Optimization solvers (included for flexibility)
+      - pyscipopt  # SCIP solver (open-source, MILP)
+      - gurobipy>=10  # Gurobi (commercial, free academic license)

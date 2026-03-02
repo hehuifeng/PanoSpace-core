@@ -17,27 +17,52 @@ across entire tissue sections.
 
 - **OS**: Linux (strongly recommended)
 - **GPU**: NVIDIA GPU with CUDA support (strongly recommended for performance)
+  - CUDA 12.1+ recommended
+  - Minimum 8GB GPU memory
 
 ### Installation
 
 **Option 1: Automatic (Recommended)**
+
 ```bash
 git clone https://github.com/hehuifeng/PanoSpace.git
 cd PanoSpace
 bash install.sh
 ```
-The script will automatically detect your GPU and install the GPU-enabled version.
+
+The script will automatically:
+- Create conda environment with all dependencies (except PyTorch)
+- Detect your GPU
+- Install PyTorch via pip (with CUDA if GPU detected)
+- Install PanoSpace package
+- Verify the installation
 
 **Option 2: Manual**
+
+For **GPU version** (recommended):
 ```bash
+# Step 1: Create conda environment
 conda env create -f environment-gpu.yml
 conda activate PanoSpace
-pip install -e .
+
+# Step 2: Install PyTorch with CUDA support
+pip install --extra-index-url https://download.pytorch.org/whl/cu121 torch>=2.1 torchvision>=0.15
+
+# Step 3: Install PanoSpace
+pip install .
 ```
 
-**Verify Installation**
+For **CPU-only version**:
 ```bash
-python -c "import panospace as ps; print('PanoSpace installed successfully!')"
+# Step 1: Create conda environment
+conda env create -f environment.yml
+conda activate PanoSpace
+
+# Step 2: Install PyTorch (CPU-only)
+pip install torch>=2.1 torchvision>=0.15
+
+# Step 3: Install PanoSpace
+pip install .
 ```
 
 <details>

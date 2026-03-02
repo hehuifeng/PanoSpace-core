@@ -98,6 +98,7 @@ def main() -> int:
         ("lightning", "Lightning"),
         ("transformers", "Transformers"),
         ("ot", "POT (Python Optimal Transport)"),
+        ("scvi", "scvi-tools (for cell2location)"),
     ]
     for module, display_name in annotation_modules:
         status = "✓" if check_module(module) else "✗"
@@ -108,6 +109,12 @@ def main() -> int:
         print("    ✓ Gurobi (optimization acceleration)")
     else:
         print("    ℹ Gurobi not installed (optional, annotation will work without it)")
+
+    # Check pyscipopt
+    if check_module("pyscipopt"):
+        print("    ✓ PySCIPOpt (SCIP solver)")
+    else:
+        print("    ℹ PySCIPOpt not installed")
 
     # Prediction
     print("\n  [Prediction]")
