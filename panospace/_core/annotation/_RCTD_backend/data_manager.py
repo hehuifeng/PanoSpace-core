@@ -18,7 +18,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 # GitHub Release information
-GITHUB_REPO = "hehuifeng/PanoSpace"
+GITHUB_REPO = "hehuifeng/PanoSpace-core"
 DATA_VERSION = "v0.1.0"
 
 # Expected file sizes and MD5 checksums
