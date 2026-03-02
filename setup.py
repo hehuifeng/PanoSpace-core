@@ -40,9 +40,12 @@ BASE_REQUIREMENTS = [
 CELLVIT_REQUIREMENTS = [
     "torch>=2.0",
     "torchvision>=0.15",
+    "einops>=0.6",  # tensor operations
+    "shapely>=2.0",  # geometry operations for postprocessing
 ]
 
 ANNOTATION_REQUIREMENTS = [
+    "torch>=2.0",  # Required by pytorch-lightning and pyro-ppl
     "pyro-ppl>=1.8",
     "pytorch-lightning>=2.1",
     "lightning>=2.1",
@@ -50,13 +53,6 @@ ANNOTATION_REQUIREMENTS = [
     "scvi-tools>=1.0",  # for cell2location backend
     "pyscipopt",  # SCIP solver (open-source, MILP)
     "gurobipy>=10",  # optional commercial solver (free academic license available)
-]
-
-CELLVIT_REQUIREMENTS = [
-    "torch>=2.0",
-    "torchvision>=0.15",
-    "einops>=0.6",  # tensor operations
-    "shapely>=2.0",  # geometry operations for postprocessing
 ]
 
 MICROENV_REQUIREMENTS = [
