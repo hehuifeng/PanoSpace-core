@@ -99,12 +99,6 @@ setup(
     license="MIT",
     packages=find_packages(exclude=("tests", "tests.*")),
     include_package_data=True,
-    package_data={
-        "panospace._core.annotation._RCTD_backend": [
-            "extdata/*.txt",
-            "extdata/*.txt.gz",
-        ],
-    },
     install_requires=INSTALL_REQUIRES,
     extras_require=EXTRAS_REQUIRE,
     python_requires=">=3.9",
