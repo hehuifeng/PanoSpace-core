@@ -5,14 +5,14 @@ from pathlib import Path
 from setuptools import find_packages, setup
 
 PACKAGE_NAME = "panospace"
-REPO_URL = "https://github.com/hehuifeng/PanoSpace"
+REPO_URL = "https://github.com/hehuifeng/PanoSpace-core"
 BASE_DIR = Path(__file__).parent.resolve()
 README = (BASE_DIR / "README.md").read_text(encoding="utf8")
 
 # ---------------------------------------------------------------------------
 # Version
 # ---------------------------------------------------------------------------
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 
 # ---------------------------------------------------------------------------
 # Dependency groups
