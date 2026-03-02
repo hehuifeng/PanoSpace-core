@@ -6,6 +6,7 @@ import os
 from qpsolvers import solve_qp
 import ray
 import gzip
+from .data_manager import get_data_file_path
 
 data_type = 'float32'
 
@@ -16,9 +17,17 @@ logger = logging.getLogger(__name__)
 
 
 def LoadLikelihoodTable():
-    with gzip.open(os.path.dirname(os.path.realpath(__file__)) + '/extdata/Q_mat_1_1.txt.gz','rt') as f:
+    # Ensure data files are present (downloads if missing)
+    logger.info("Loading RCTD likelihood tables...")
+    q_mat_1_1_path = get_data_file_path('Q_mat_1_1.txt.gz')
+    q_mat_1_2_path = get_data_file_path('Q_mat_1_2.txt.gz')
+    q_mat_2_1_path = get_data_file_path('Q_mat_2_1.txt.gz')
+    q_mat_2_2_path = get_data_file_path('Q_mat_2_2.txt.gz')
+    x_vals_path = get_data_file_path('X_vals.txt')
+
+    with gzip.open(str(q_mat_1_1_path), 'rt') as f:
         lines = f.readlines()
-    with gzip.open(os.path.dirname(os.path.realpath(__file__)) + '/extdata/Q_mat_1_2.txt.gz','rt') as f:
+    with gzip.open(str(q_mat_1_2_path), 'rt') as f:
         lines += f.readlines()
 
     Q1 = {}
@@ -30,9 +39,9 @@ def LoadLikelihoodTable():
         else:
             Q1[str(i + 10)] = np.reshape(np.array(lines[i].split(' ')).astype(np.float64), (2536, 103)).T
 
-    with gzip.open(os.path.dirname(os.path.realpath(__file__))+'/extdata/Q_mat_2_1.txt.gz','rt') as f:
+    with gzip.open(str(q_mat_2_1_path), 'rt') as f:
         lines2 = f.readlines()
-    with gzip.open(os.path.dirname(os.path.realpath(__file__))+'/extdata/Q_mat_2_2.txt.gz','rt') as f:
+    with gzip.open(str(q_mat_2_2_path), 'rt') as f:
         lines2 += f.readlines()
 
     Q2 = {}
@@ -41,11 +50,13 @@ def LoadLikelihoodTable():
 
     Q_mat_all = Q1 | Q2
 
-    with open(os.path.dirname(os.path.realpath(__file__))+'/extdata/X_vals.txt') as f:
+    with open(str(x_vals_path)) as f:
         lines_X = f.readlines()
 
     X_vals_loc = np.array([float(lines_X_item.strip()) for lines_X_item in lines_X])
-    
+
+    logger.info("RCTD likelihood tables loaded successfully.")
+
     return Q_mat_all, X_vals_loc
 
 def run_RCTD(RCTD, Q_mat_all, X_vals_loc, doublet_mode = 'full', loggings = None):
