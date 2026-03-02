@@ -19,3 +19,5 @@ build/
 
 # PyPI 发布指南（不发布到 GitHub）
 PYPI_PUBLISHING_GUIDE.md
+*.tar.gz
+rctd_data_*

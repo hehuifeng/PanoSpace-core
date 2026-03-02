@@ -87,6 +87,8 @@ def download_file(url, filepath, expected_size=None):
     # Download with progress
     total_size = expected_size or int(response.headers.get('content-length', 0))
     downloaded = 0
+    import time
+    start_time = time.time()
 
     with open(filepath, 'wb') as f:
         for chunk in response.iter_content(chunk_size=8192):
@@ -98,7 +100,11 @@ def download_file(url, filepath, expected_size=None):
                 if downloaded % (10 * 1024 * 1024) == 0 or downloaded == total_size:
                     if total_size > 0:
                         progress = 100 * downloaded / total_size
-                        logger.info(f"  Progress: {progress:.1f}% ({downloaded / 1024 / 1024:.1f}MB)")
+                        elapsed = time.time() - start_time
+                        speed = (downloaded / 1024 / 1024) / elapsed if elapsed > 0 else 0
+                        remaining = (total_size - downloaded) / speed / 1024 / 1024 if speed > 0 else 0
+                        logger.info(f"  Progress: {progress:.1f}% ({downloaded / 1024 / 1024:.1f}/{total_size / 1024 / 1024:.1f}MB) "
+                                  f"Speed: {speed:.2f}MB/s ETA: {remaining:.1f}s")
 
     logger.info(f"Downloaded {filepath.name} successfully")
 
@@ -163,6 +169,11 @@ def ensure_data_files():
 
     # Download and extract archive
     logger.info(f"Found {len(missing_files)} missing RCTD data files. Downloading archive...")
+    logger.info(f"Download URL: {ARCHIVE_URL}")
+    logger.warning("Note: Download may take 20-30 minutes depending on network speed.")
+    logger.warning("If download is too slow, press Ctrl+C to cancel and download manually:")
+    logger.warning(f"  URL: {ARCHIVE_URL}")
+    logger.warning(f"  Extract to: {data_dir}")
 
     # Download archive to temp location
     temp_archive = Path("/tmp") / DATA_ARCHIVE
@@ -191,6 +202,18 @@ def ensure_data_files():
 
     except Exception as e:
         logger.error(f"Failed to download/extract data archive: {e}")
+        logger.error("\n" + "="*80)
+        logger.error("MANUAL DOWNLOAD INSTRUCTIONS:")
+        logger.error("="*80)
+        logger.error(f"1. Download the data archive manually from:")
+        logger.error(f"   {ARCHIVE_URL}")
+        logger.error(f"\n2. Extract the archive to the data directory:")
+        logger.error(f"   mkdir -p {data_dir}")
+        logger.error(f"   tar -xzf {DATA_ARCHIVE} -C {data_dir}")
+        logger.error(f"\n3. Verify the following files are present:")
+        for filename in FILE_INFO.keys():
+            logger.error(f"   - {filename}")
+        logger.error("="*80)
         # Clean up partial download
         if temp_archive.exists():
             temp_archive.unlink()
