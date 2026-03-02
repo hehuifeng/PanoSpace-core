@@ -7,6 +7,7 @@ Downloads large data files from GitHub Releases on first use.
 import os
 import logging
 import hashlib
+import tarfile
 from pathlib import Path
 
 try:
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 # GitHub Release information
 GITHUB_REPO = "hehuifeng/PanoSpace-core"
 DATA_VERSION = "v0.1.0"
+DATA_ARCHIVE = "rctd_data_v0.1.0.tar.gz"
 
 # Expected file sizes and MD5 checksums
 FILE_INFO = {
@@ -33,6 +35,7 @@ FILE_INFO = {
 
 # Base URL for GitHub Releases
 BASE_URL = f"https://github.com/{GITHUB_REPO}/releases/download/{DATA_VERSION}"
+ARCHIVE_URL = f"{BASE_URL}/{DATA_ARCHIVE}"
 
 
 def get_data_dir():
@@ -138,7 +141,7 @@ def verify_file(filepath, expected_size=None):
 def ensure_data_files():
     """
     Ensure all required data files are present.
-    Downloads missing files from GitHub Releases.
+    Downloads and extracts archive from GitHub Releases if needed.
 
     Returns
     -------
@@ -158,29 +161,40 @@ def ensure_data_files():
         logger.info("All RCTD data files are present and verified.")
         return data_dir
 
-    # Download missing files
-    logger.info(f"Found {len(missing_files)} missing RCTD data files. Downloading...")
+    # Download and extract archive
+    logger.info(f"Found {len(missing_files)} missing RCTD data files. Downloading archive...")
 
-    for filename in missing_files:
-        url = f"{BASE_URL}/{filename}"
-        filepath = data_dir / filename
+    # Download archive to temp location
+    temp_archive = Path("/tmp") / DATA_ARCHIVE
 
-        try:
-            download_file(url, filepath, FILE_INFO[filename]["size"])
+    try:
+        download_file(ARCHIVE_URL, temp_archive, 265 * 1024 * 1024)  # 265MB
 
-            # Verify after download
+        # Extract archive
+        logger.info(f"Extracting {DATA_ARCHIVE}...")
+        data_dir.mkdir(parents=True, exist_ok=True)
+
+        with tarfile.open(temp_archive, 'r:gz') as tar:
+            tar.extractall(data_dir)
+
+        # Clean up archive
+        temp_archive.unlink()
+
+        # Verify all files
+        for filename in FILE_INFO.keys():
+            filepath = data_dir / filename
             if not verify_file(filepath, FILE_INFO[filename]["size"]):
-                raise ValueError(f"Downloaded file {filename} failed verification")
+                raise ValueError(f"Extracted file {filename} failed verification")
 
-        except Exception as e:
-            logger.error(f"Failed to download {filename}: {e}")
-            # Clean up partial download
-            if filepath.exists():
-                filepath.unlink()
-            raise
+        logger.info("All RCTD data files downloaded and extracted successfully.")
+        return data_dir
 
-    logger.info("All RCTD data files downloaded successfully.")
-    return data_dir
+    except Exception as e:
+        logger.error(f"Failed to download/extract data archive: {e}")
+        # Clean up partial download
+        if temp_archive.exists():
+            temp_archive.unlink()
+        raise
 
 
 def get_data_file_path(filename):
