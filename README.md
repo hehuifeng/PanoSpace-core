@@ -22,7 +22,40 @@ across entire tissue sections.
 
 ### Installation
 
-**Option 1: Automatic (Recommended)**
+**Option 1: Install from PyPI (Recommended for Users)**
+
+```bash
+# Basic installation (lightweight, no PyTorch)
+pip install panospace
+
+# For cell detection functionality (includes PyTorch)
+pip install panospace[cellvit]
+
+# For cell annotation functionality (includes deep learning libraries)
+pip install panospace[annotation]
+
+# For microenvironment analysis (lightweight)
+pip install panospace[microenv]
+
+# For all functionality
+pip install panospace[all]
+```
+
+Then set up conda environment for dependencies:
+```bash
+# Create a conda environment
+conda create -n panospace python=3.11
+conda activate panospace
+
+# Install PyTorch manually (if using [cellvit] or [annotation])
+# For GPU version:
+pip install --extra-index-url https://download.pytorch.org/whl/cu121 torch>=2.1 torchvision>=0.15
+
+# For CPU version:
+pip install torch>=2.1 torchvision>=0.15
+```
+
+**Option 2: Install from Source (Automatic Setup)**
 
 ```bash
 git clone https://github.com/hehuifeng/PanoSpace.git
@@ -37,7 +70,7 @@ The script will automatically:
 - Install PanoSpace package
 - Verify the installation
 
-**Option 2: Manual**
+**Option 3: Manual Installation from Source**
 
 For **GPU version** (recommended):
 ```bash
