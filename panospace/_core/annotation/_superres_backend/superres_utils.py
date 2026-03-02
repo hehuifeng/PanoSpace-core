@@ -200,11 +200,11 @@ class DINOv2_superres_deconv(object):
             logger.info("Checkpoint exists in %s, loading from checkpoint...", self.path)
             logger.info("If using checkpoint, run_train method will be skipped.")
             logger.info("If you want to retrain, please delete the checkpoint file first.")
-            self.run_train = False
+            self.train = False
             self.model = DINOv2NeighborClassifier.load_from_checkpoint(os.path.join(self.path,"superres_model.ckpt"),num_classes=num_classes)
         else:
             logger.info("Initializing new model...")
-            self.run_train = True
+            self.train = True
             self.model = DINOv2NeighborClassifier(num_classes=num_classes,
                                                   class_weights=class_weights,
                                                   learning_rate=learning_rate,

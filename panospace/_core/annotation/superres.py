@@ -40,7 +40,11 @@ def superres_core(
                                 pretrained_model_name=pretrained_model_name,
                                 cache_dir=cache_dir)
 
-    sr_inferencer.run_train(epoch=epoch, batch_size=batch_size, num_workers=num_workers, accelerator=accelerator)
+    if sr_inferencer.train:
+        logger.info("Start training super-resolution model...")
+        sr_inferencer.run_train(epoch=epoch, batch_size=batch_size, num_workers=num_workers, accelerator=accelerator)
+    else:
+        logger.info("Using pre-trained super-resolution model...")
     sr_adata = sr_inferencer.run_superres()
 
     return sr_adata

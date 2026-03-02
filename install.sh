@@ -33,18 +33,22 @@ if command -v nvidia-smi &> /dev/null && nvidia-smi &> /dev/null; then
 
     if [[ "$install_gpu" =~ ^[Yy]$ ]]; then
         env_file="environment-gpu.yml"
+        install_gpu_pytorch=true
         echo ""
-        echo "Installing GPU-enabled version (CUDA 12.x)..."
-        echo "Note: This will download PyTorch with CUDA support (~4GB)"
+        echo "Installing GPU-enabled version (CUDA 12.1)..."
+        echo "Note: PyTorch with CUDA will be installed separately via pip"
     else
         env_file="environment.yml"
+        install_gpu_pytorch=false
         echo ""
         echo "Installing CPU-only version..."
+        echo "Note: PyTorch will be installed separately via pip"
     fi
 else
     echo "No NVIDIA GPU detected or nvidia-smi not available."
     echo "Installing CPU-only version..."
     env_file="environment.yml"
+    install_gpu_pytorch=false
 fi
 
 # Check if environment file exists
@@ -65,10 +69,25 @@ echo "Activating PanoSpace environment..."
 eval "$(conda shell.bash hook)"
 conda activate PanoSpace
 
+# Install PyTorch via pip (separate from conda to ensure proper CUDA support)
+echo ""
+echo "Installing PyTorch via pip..."
+echo "Note: Removing any existing PyTorch installation first..."
+pip uninstall -y torch torchvision 2>/dev/null || true
+
+if [ "$install_gpu_pytorch" = true ]; then
+    echo "Installing PyTorch with CUDA support (this may take 5-10 minutes)..."
+    pip install --extra-index-url https://download.pytorch.org/whl/cu121 \
+  "torch>=2.1" "torchvision>=0.15"
+else
+    echo "Installing CPU-only PyTorch..."
+    pip install "torch>=2.1" "torchvision>=0.15"
+fi
+
 # Install PanoSpace
 echo ""
 echo "Installing PanoSpace package..."
-pip install -e .
+pip install .
 
 # Verify installation
 echo ""

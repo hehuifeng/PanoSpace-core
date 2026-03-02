@@ -3,7 +3,6 @@ import time
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
-import scipy
 import ot  # POT for OT (EMD / Sinkhorn)
 
 logger = logging.getLogger(__name__)
@@ -18,30 +17,25 @@ def probe_scip() -> bool:
     bool
         True if SCIP is usable.
     """
-    try:
-        from pyscipopt import Model, SCIP_RESULT
-        # Simple test: create a model and add a variable
-        model = Model("probe_test")
-        model.setParam("display/verblevel", 0)
-        x = model.addVar("x", vtype="B")
-        model.setObjective(x, sense="maximize")
-        return True
-    except Exception:
-        return False
 
-_SCIP_AVAILABLE = False
-_SCIP_PROBE_ERROR = None
+    from pyscipopt import Model, SCIP_RESULT
+    # Simple test: create a model and add a variable
+    model = Model("probe_test")
+    model.setParam("display/verblevel", 0)
+    x = model.addVar("x", vtype="B")
+    model.setObjective(x, sense="maximize")
+    return True
 
 try:
     _SCIP_AVAILABLE = probe_scip()
 except Exception as e:
-    _SCIP_PROBE_ERROR = str(e)
+    logger.info(f"SCIP probe failed: {str(e)}")
     _SCIP_AVAILABLE = False
 
 if _SCIP_AVAILABLE:
     from pyscipopt import Model, SCIP_RESULT, quicksum
-else:
-    logger.info("SCIP disabled: PySCIPOpt not installed or SCIP not available.")
+# else:
+#     logger.info("SCIP disabled: PySCIPOpt not installed or SCIP not available.")
 
 
 def probe_gurobi() -> bool:
@@ -53,51 +47,39 @@ def probe_gurobi() -> bool:
     bool
         True if Gurobi is usable and license is valid.
     """
-    try:
-        import gurobipy as gp
 
-        # --- Version check ---
-        major, minor, *_ = gp.gurobi.version()
-        if major < 10:
-            return False
+    import gurobipy as gp
 
-        # --- Minimal model lifecycle test ---
-        env = gp.Env(empty=True)
-        env.setParam("OutputFlag", 0)
-        env.start()
-
-        model = gp.Model(env=env)
-        model.dispose()
-        env.dispose()
-
-        return True
-
-    except Exception:
+    # --- Version check ---
+    major, minor, *_ = gp.gurobi.version()
+    if major < 10:
         return False
-    
-_GUROBI_AVAILABLE = False
-_GUROBI_PROBE_ERROR = None
+
+    # --- Minimal model lifecycle test ---
+    env = gp.Env(empty=True)
+    env.setParam("OutputFlag", 0)
+    env.start()
+
+    model = gp.Model(env=env)
+    model.dispose()
+    env.dispose()
+
+    return True
+
+
 
 try:
     _GUROBI_AVAILABLE = probe_gurobi()
 except Exception as e:
-    _GUROBI_PROBE_ERROR = str(e)
+    logger.info(f"Gurobi probe failed: {str(e)}")
     _GUROBI_AVAILABLE = False
 
 if _GUROBI_AVAILABLE:
     import gurobipy as gp
     from gurobipy import GRB
-else:
-    logger.info("Gurobi disabled: probe failed or license invalid.")
+# else:
+#     logger.info("Gurobi disabled: probe failed or license invalid.")
 
-# try:
-#     import gurobipy as gp
-#     from gurobipy import GRB
-#     _GUROBI_AVAILABLE = True
-# except ImportError:
-#     _GUROBI_AVAILABLE = False
-#     gp = None
-#     GRB = None
 import warnings
 
 from ...._utils.utils import radius_membership_sparse

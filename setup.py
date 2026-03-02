@@ -48,7 +48,7 @@ ANNOTATION_REQUIREMENTS = [
     "lightning>=2.1",
     "transformers>=4.33",
     "scvi-tools>=1.0",  # for cell2location backend
-    "ortools>=9.0",  # open-source optimization (alternative to gurobipy)
+    "pyscipopt",  # SCIP solver (open-source, MILP)
     "gurobipy>=10",  # optional commercial solver (free academic license available)
 ]
 
