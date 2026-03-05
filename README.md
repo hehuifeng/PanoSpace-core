@@ -2,6 +2,10 @@
 
 **High-resolution single-cell insight from low-resolution spatial transcriptomics**
 
+<!-- PyPI  -->
+[![PyPI Version](https://img.shields.io/pypi/v/panospace.svg?color=blue&label=panospace)](https://pypi.org/project/panospace/)
+
+
 ![PanoSpace overview](figures/fig1.png)
 
 PanoSpace bridges the gap between spot-based spatial transcriptomics (e.g., 10x
