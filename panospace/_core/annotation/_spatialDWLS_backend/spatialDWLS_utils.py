@@ -25,6 +25,12 @@ def solve_OLS_internal(S, B):
 
 def find_dampening_constant(S, B, gold_standard, n_iter=50):
     ws = (1 / (S @ gold_standard)) ** 2
+
+    ws[np.isinf(ws)] = np.nan
+    ws[np.isnan(ws)] = np.nanmax(ws[~np.isnan(ws)])
+    ws = ws.astype(np.float64)
+    ws = np.clip(ws, 0, 1e6)
+
     ws_scaled = ws / np.min(ws)
     ws_scaled[np.isinf(ws_scaled)] = np.nanmax(ws_scaled[~np.isinf(ws_scaled)])
     max_val = np.nanmax(ws_scaled)
@@ -40,6 +46,7 @@ def find_dampening_constant(S, B, gold_standard, n_iter=50):
         for _ in range(n_iter):
             subset = np.random.choice(len(ws), len(ws)//2, replace=False)
             W = ws_dampened[subset]
+            # print('S:', S, 'B:', B, 'W:', W)
             fit_coef, *_ = np.linalg.lstsq(S[subset, :], B[subset] * W, rcond=None)
             fit_coef[fit_coef < 0] = 0
             scores.append(np.std(fit_coef))

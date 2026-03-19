@@ -29,41 +29,25 @@ across entire tissue sections.
 **Option 1: Install from PyPI (Recommended for Users)**
 
 ```bash
-# Basic installation (lightweight, no PyTorch)
-pip install panospace
-
-# For cell detection functionality (includes PyTorch)
-pip install panospace[cellvit]
-
-# For cell annotation functionality (includes deep learning libraries)
-pip install panospace[annotation]
-
-# For microenvironment analysis (lightweight)
-pip install panospace[microenv]
-
-# For all functionality
-pip install panospace[all]
-```
-
-Then set up conda environment for dependencies:
-```bash
-# Create a conda environment
+# Step 1: Create a conda environment
 conda create -n panospace python=3.11
 conda activate panospace
 
-# Install PyTorch manually (if using [cellvit] or [annotation])
-# For GPU version:
+# Step 2: Install PanoSpace with all dependencies
+pip install panospace[all]
+
+# Step 3: Install PyTorch with CUDA support (GPU version, recommended)
 pip install --extra-index-url https://download.pytorch.org/whl/cu121 torch>=2.1 torchvision>=0.15
 
-# For CPU version:
-pip install torch>=2.1 torchvision>=0.15
+# For CPU-only version:
+# pip install torch>=2.1 torchvision>=0.15
 ```
 
 **Option 2: Install from Source (Automatic Setup)**
 
 ```bash
-git clone https://github.com/hehuifeng/PanoSpace.git
-cd PanoSpace
+git clone https://github.com/hehuifeng/PanoSpace-core.git
+cd PanoSpace-core
 bash install.sh
 ```
 
@@ -83,20 +67,7 @@ conda env create -f environment-gpu.yml
 conda activate PanoSpace
 
 # Step 2: Install PyTorch with CUDA support
-pip install --extra-index-url https://download.pytorch.org/whl/cu121 torch>=2.1 torchvision>=0.15
-
-# Step 3: Install PanoSpace
-pip install .
-```
-
-For **CPU-only version**:
-```bash
-# Step 1: Create conda environment
-conda env create -f environment.yml
-conda activate PanoSpace
-
-# Step 2: Install PyTorch (CPU-only)
-pip install torch>=2.1 torchvision>=0.15
+pip install --extra-index-url https://download.pytorch.org/whl/cu121 'torch>=2.1' 'torchvision>=0.15'
 
 # Step 3: Install PanoSpace
 pip install .
@@ -128,30 +99,7 @@ PanoSpace automatically selects the best available solver:
 - If **Gurobi is installed** → Uses Gurobi (fastest)
 - If **Gurobi is not available** → Uses SCIP (open-source fallback)
 
-Both solvers implement the **same mathematical model** with:
-- Global cell-type quotas
-- Spot-level quota constraints (ensures consistency within each spot)
-- Exact 0/1 assignment (no approximation)
-
-**Installation:**
-
-**SCIP** (installed by default):
-```bash
-# Already included in environment.yml
-conda activate PanoSpace
-```
-
-**Gurobi** (optional, recommended for better performance):
-```bash
-# Install Gurobi
-conda install -c conda-forge gurobipy
-
-# Request free academic license at: https://www.gurobi.com/academia/academic-program-and-licenses/
-# Follow Gurobi's instructions to activate the license
-
-# Verify installation
-python -c "import gurobipy; print('Gurobi installed successfully!')"
-```
+Both solvers implement the **same mathematical model**.
 
 *Note: Based on our experience, Gurobi typically solves problems in under 1 minute, while SCIP may take hundreds of minutes for the same problem.*
 
@@ -164,42 +112,88 @@ python -c "import gurobipy; print('Gurobi installed successfully!')"
 ### Basic Workflow
 
 ```python
+import os
 import panospace as ps
 from PIL import Image
 
-# 1. Detect cells from tissue image
+# ==============================================================================
+# Step 1: Cell Detection from Histology Image
+# ==============================================================================
+# Load high-resolution tissue image (TIFF/PNG/JPEG format, 40x+ magnification recommended)
 tissue = Image.open("path/to/visium_slide.tif")
-seg_adata, contours = ps.detect_cells(tissue, model="cellvit", gpu=True)
 
-# 2. Deconvolve Visium spots
-#    visium_adata: AnnData with .X (expression) and .obsm['spatial'] (coordinates)
-#    sc_reference: AnnData with .X and .obs[celltype_key] (cell type labels)
+# Perform cell segmentation using deep learning (CellViT model)
+# Returns:
+#   - seg_adata: AnnData object with cell segmentation results
+#   - contours: Cell boundary contours for visualization
+seg_adata, contours = ps.detect_cells(
+    tissue,
+    model="cellvit",  # Pre-trained deep learning model for cell detection
+    gpu=True          # Use GPU acceleration (requires CUDA-compatible GPU)
+)
+
+
+# ==============================================================================
+# Step 2: Cell Type Deconvolution of Visium Spots
+# ==============================================================================
+# Input requirements:
+#   - visium_adata: AnnData with spatial transcriptomics data
+#     * .X: Gene expression matrix (dense)
+#     * .obsm['spatial']: Spatial coordinates of Visium spots
+#   - sc_reference: Single-cell reference AnnData
+#     * .X: Gene expression matrix (sparse)
+#     * .obs[celltype_key]: Cell type annotations for each cell
 deconv_adata = ps.deconv_celltype(
     adata_vis=visium_adata,
     sc_adata=sc_reference,
-    celltype_key="celltype_major",  # Column name in sc_reference.obs
-    methods=['RCTD', 'spatialDWLS', 'cell2location']
+    celltype_key="celltype_major",  # Column name in sc_reference.obs containing cell type labels
+    methods=['RCTD', 'spatialDWLS', 'cell2location'],  # Ensemble of deconvolution methods
+    cache_dir=os.path.join(OUTPUT_DIR, 'deconv_cache'),  # Cache directory for intermediate results
+    project_name='simulation_data',                      # Project identifier for caching
+    resume=True,                  # Resume from cached results if available
+    continue_on_error=False,      # Stop execution if any method fails
+    require_nonnegative=False     # Allow negative values in deconvolution results
 )
 
-# 3. Super-resolve to cell level
+
+# ==============================================================================
+# Step 3: Super-Resolution
+# ==============================================================================
+# Transform spot-level deconvolution results to whole slides
+# using spatial information and histology image features
 sr_adata = ps.superres_celltype(
-    deconv_adata=deconv_adata,
-    img_dir="path/to/visium_slide.tif"
+    deconv_adata=deconv_adata,     # Output from Step 2
+    img_dir="path/to/visium_slide.tif"  # Path to histology image for spatial guidance
 )
 
-# 4. Annotate segmented cells
+
+# ==============================================================================
+# Step 4: Cell Type Annotation for Segmented Cells
+# ==============================================================================
+# Assign cell types to segmented cells using:
+# - Spot-level quota constraints from deconvolution results
+# - Super-resolved cell type probabilities
+# - MILP optimization (SCIP or Gurobi solver)
+deconv_adata.uns['radius'] = 100  # Set spot radius (in pixels) for spatial transcriptomics technology
+
 annotated_adata = ps.celltype_annotator(
-    decov_adata=visium_adata,
-    sr_deconv_adata=sr_adata,
-    seg_adata=seg_adata
+    decov_adata=deconv_adata,    # Original Visium data with spot-level deconvolution results
+    alpha = 0.3,
+    sr_deconv_adata=sr_adata,    # Super-resolved cell type probabilities
+    seg_adata=seg_adata          # Segmented cells from Step 1
 )
 
-# 5. Predict gene expression
+
+# ==============================================================================
+# Step 5: Gene Expression Prediction at Single-Cell Level
+# ==============================================================================
+# Predict complete gene expression profiles for each annotated cell
+# using single-cell reference and spatial context
 pred_adata = ps.genexp_predictor(
-    sc_adata=sc_reference,
-    spot_adata=visium_adata,
-    infered_adata=annotated_adata,
-    celltype_list=list(sc_reference.obs["celltype_major"].unique())
+    sc_adata=sc_reference,              # Single-cell reference with complete transcriptome (can be same as deconvolution)
+    spot_adata=deconv_adata,            # Visium spot data for spatial context
+    infered_adata=annotated_adata,      # Annotated cells from Step 4
+    celltype_list=list(sc_reference.obs["celltype_major"].unique())  # All cell types to predict
 )
 ```
 
@@ -207,40 +201,83 @@ pred_adata = ps.genexp_predictor(
 ### Cell-Cell Interaction Analysis
 
 ```python
-# Analyze interactions between cell pairs
-pairs = [('Cancer_epithelial', 'CAF'), ('T_cell', 'Macrophage')]
+# ==============================================================================
+# Cell-Cell Interaction Analysis
+# ==============================================================================
+# Define cell type pairs for interaction analysis
+# Format: [(source_cell_type, target_cell_type), ...]
+pairs = [
+    ('Cancer_epithelial', 'CAF'),      # Cancer epithelial cells → Cancer-associated fibroblasts
+    ('T_cell', 'Macrophage')           # T cells → Macrophages
+]
+
+# Analyze ligand-receptor mediated interactions between cell type pairs
+# Returns: Dictionary with (source, target) tuples as keys
 results = ps.analyze_interaction(
     adata=annotated_adata,
     cell_type_pairs=pairs,
-    cell_type_col='pred_cell_type',  # Column in adata.obs
-    radius=100.0  # Neighborhood radius (same units as spatial coordinates)
+    cell_type_col='pred_cell_type',  # Column in adata.obs containing cell type annotations
+    radius=100.0                      # Neighborhood radius for spatial interaction (in pixels)
+                                     # Interactions are counted for cells within this distance
 )
 
-# Extract results and find correlated genes
-expr_df, target_abundance, _ = results[('Cancer_epithelial', 'CAF')]
-corr_results = ps.correlation_analysis(expr_df, target_abundance)
+# ==============================================================================
+# Extract Interaction Results and Perform Correlation Analysis
+# ==============================================================================
+# Extract results for a specific cell pair: Cancer_epithelial → CAF
+# Returns:
+#   - expr_df: DataFrame of ligand/receptor gene expression in source cells
+#   - target_abundance: Array of target cell abundance in each neighborhood
+#   - metadata: Additional information about the interaction
+expr_df, target_abundance, metadata = results[('Cancer_epithelial', 'CAF')]
+
+# Perform correlation analysis between gene expression and target cell abundance
+# Identifies potential signaling molecules driving the interaction
+corr_results = ps.correlation_analysis(
+    expr_df,              # Gene expression matrix (ligands/receptors)
+    target_abundance      # Target cell abundance across neighborhoods
+)
+
+# Extract statistically significant genes (adjusted p-value < 0.05)
 significant_genes = corr_results.query('p_adjust < 0.05')['gene'].tolist()
 
-# Functional enrichment
+
+# ==============================================================================
+# Functional Enrichment Analysis
+# ==============================================================================
+# Perform Gene Ontology enrichment on significant genes
+# Identifies biological processes associated with cell-cell interactions
 if len(significant_genes) > 0:
     go_results = ps.spatial_enrichment(
         gene_list=significant_genes,
-        organism='Human',
-        gene_sets='GO_Biological_Process_2021'
+        organism='Human',                           # Organism name for gene annotation
+        gene_sets='GO_Biological_Process_2021'     # Gene set database for enrichment
     )
 ```
 
 ### Data Requirements
 
-**Visium Data** (`visium_adata`)
-- AnnData object with `.X` (gene expression) and `.obsm['spatial']` (coordinates)
+**Visium Spatial Transcriptomics Data** (`visium_adata`)
+- **Format**: AnnData object
+- **Required fields**:
+  - `.X`: Gene expression matrix (counts values)
+    - Shape: `(n_spots, n_genes)`
+    - Dense or sparse matrix format supported
+  - `.obsm['spatial']`: Spatial coordinates of Visium spots
+    - Shape: `(n_spots, 2)`
 
-**Single-Cell Reference** (`sc_reference`)
-- AnnData object with `.X` and `.obs[celltype_key]` (cell type labels)
-- Minimum 100 cells per type, genes should overlap with Visium data
+**Single-Cell Reference Data** (`sc_reference`)
+- **Format**: AnnData object
+- **Required fields**:
+  - `.X`: Gene expression matrix (counts values)
+    - Shape: `(n_cells, n_genes)`
+    - Dense or sparse matrix format supported
+  - `.obs[celltype_key]`: Cell type annotations for each cell
+    - Categorical or string dtype
 
 **Histology Image**
-- TIFF/PNG/JPEG format, 40x+ magnification recommended
+- **Supported formats**: TIFF, PNG, JPEG
+- **Magnification**: 20x or 40x 
 
 
 
@@ -252,8 +289,6 @@ He, HF., Peng, P., Yang, ST. et al. Unlocking single-cell level and continuous w
 
 
 ## 📧 Contact
-
-For questions or collaboration opportunities:
 
 - **Hui-Feng He** (<huifeng@mails.ccnu.edu.cn>)
 - **Xiao-Fei Zhang** (<zhangxf@ccnu.edu.cn>)

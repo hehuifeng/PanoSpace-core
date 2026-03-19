@@ -47,24 +47,43 @@ def probe_gurobi() -> bool:
     bool
         True if Gurobi is usable and license is valid.
     """
+    env = None
+    model = None
+    try:
+        import gurobipy as gp
 
-    import gurobipy as gp
+        # --- Version check ---
+        major, minor, *_ = gp.gurobi.version()
+        if major < 10:
+            return False
 
-    # --- Version check ---
-    major, minor, *_ = gp.gurobi.version()
-    if major < 10:
+        # --- Minimal model lifecycle test ---
+        env = gp.Env(empty=True)
+        env.setParam("OutputFlag", 0)
+        env.start()
+
+        model = gp.Model(env=env)
+        model.dispose()
+        env.dispose()
+        return True
+    
+    except Exception as e:
+        logger.info(f"Gurobi probe exception: {str(e)}")
         return False
 
-    # --- Minimal model lifecycle test ---
-    env = gp.Env(empty=True)
-    env.setParam("OutputFlag", 0)
-    env.start()
+    finally:
 
-    model = gp.Model(env=env)
-    model.dispose()
-    env.dispose()
+        if model is not None:
+            try:
+                model.dispose()  
+            except Exception:
+                pass  
 
-    return True
+        if env is not None:
+            try:
+                env.close() if hasattr(env, "close") else env.dispose()
+            except Exception:
+                pass
 
 
 
@@ -109,7 +128,9 @@ class CellTypeAnnotator:
         priori_type_affinities=None,
         alpha=0.3,
         ot_mode="emd",          # "sinkhorn" or "emd"
-        sinkhorn_reg=0.01       # Sinkhorn entropy regularization
+        sinkhorn_reg=0.01,       # Sinkhorn entropy regularization
+        _global_quota=True,  # Whether to enforce global quotas in MILP
+        _spot_quota=True     # Whether to enforce spot-level quotas in MILP
     ):
         """
         Parameters
@@ -150,6 +171,11 @@ class CellTypeAnnotator:
         logger.info(f"CellTypeAnnotator OT mode: {self.ot_mode}")
         self.sinkhorn_reg = float(sinkhorn_reg)
         logger.info(f"CellTypeAnnotator Sinkhorn reg: {self.sinkhorn_reg}")
+
+        self._global_quota = bool(_global_quota)
+        logger.info(f"CellTypeAnnotator global_quota: {self._global_quota}")
+        self._spot_quota = bool(_spot_quota)
+        logger.info(f"CellTypeAnnotator spot_quota: {self._spot_quota}")
 
         # Log solver availability
         logger.info(f"CellTypeAnnotator solver: Gurobi={_GUROBI_AVAILABLE}, SCIP={_SCIP_AVAILABLE}")
@@ -504,11 +530,11 @@ class CellTypeAnnotator:
         if _GUROBI_AVAILABLE:
             # Exact MILP with Gurobi (preferred)
             logger.info("Using Gurobi MILP for exact assignment with spot-level quotas.")
-            X = self._solve_mip(scores, quotas)
+            X = self._solve_mip(scores, quotas, global_quota=self._global_quota, spot_quota=self._spot_quota)
         elif _SCIP_AVAILABLE:
             # Exact MILP with SCIP (open-source fallback)
             logger.warning("Using SCIP MILP for exact assignment with spot-level quotas.")
-            logger.info("NOTE: We strongly recommend using Gurobi for significantly better performance.")
+            logger.info("NOTE!!! We strongly recommend using Gurobi for significantly better performance.")
             logger.info("Gurobi is free for academic use. https://www.gurobi.com/")
             X = self._solve_mip_scip(scores, quotas)
         else:
@@ -658,66 +684,6 @@ class CellTypeAnnotator:
 
         return X_sol
 
-    # def _solve_qp_relaxation_and_round(self, scores: np.ndarray, quotas: np.ndarray) -> np.ndarray:
-    #     """
-    #     Solve relaxed assignment with qpsolvers, then round to strictly satisfy quotas.
-
-    #     Maximize sum(scores * x) subject to:
-    #       • row sums = 1
-    #       • column sums = quotas
-    #       • 0 <= x <= 1
-
-    #     Implemented as: minimize q^T x with tiny quadratic term for numerical stability.
-    #     """
-    #     nseg, ntypes = scores.shape
-    #     x_size = nseg * ntypes
-
-    #     # Maximize sum scores * x  => minimize q^T x with q = -vec(scores)
-    #     q = -scores.reshape(-1, order='C')  # row-major (i,k) -> i*ntypes + k
-
-    #     # Small diagonal regularization to avoid degeneracy in some solvers
-    #     eps = 1e-8
-    #     P = sp.eye(x_size, format='csc') * eps
-
-    #     # Equality constraints: row sums = 1, column sums = quotas
-    #     # A_row: (nseg x x_size), each row selects the K vars of a segment
-    #     A_row = sp.kron(sp.eye(nseg), np.ones((1, ntypes)))
-    #     b_row = np.ones(nseg)
-
-    #     # A_col: (ntypes x x_size), each row aggregates one cell type across segments
-    #     A_col = sp.kron(np.ones((1, nseg)), sp.eye(ntypes))
-    #     b_col = quotas.astype(float)
-
-    #     A = sp.vstack([A_row, A_col], format='csc')
-    #     b = np.hstack([b_row, b_col])
-
-    #     # Bounds 0 <= x <= 1  =>  Gx <= h with G = [ I ; -I ], h = [1; 0]
-    #     G = sp.vstack([sp.eye(x_size), -sp.eye(x_size)], format='csc')
-    #     h = np.hstack([np.ones(x_size), np.zeros(x_size)])
-
-    #     # Solve
-    #     x_sol = solve_qp(P, q, G, h, A, b, solver=self.qp_solver, verbose=False)
-    #     if x_sol is None:
-    #         # Fallback: ignore column quotas; pick per-row via softmax,
-    #         # then repair to satisfy quotas.
-    #         probs = scipy.special.softmax(scores, axis=1)
-    #         assign = np.argmax(probs, axis=1)
-    #         X = np.zeros_like(scores, dtype=int)
-    #         for i, k in enumerate(assign):
-    #             X[i, k] = 1
-    #         return self._repair_quotas(X, quotas, scores)
-
-    #     X = x_sol.reshape(nseg, ntypes, order='C')
-
-    #     # Round to one-hot
-    #     hard = np.zeros_like(X, dtype=int)
-    #     top1 = np.argmax(X, axis=1)
-    #     hard[np.arange(nseg), top1] = 1
-
-    #     # Enforce column quotas exactly
-    #     hard = self._repair_quotas(hard, quotas, scores)
-    #     return hard
-
     @staticmethod
     def _repair_quotas(hard_X: np.ndarray, quotas: np.ndarray, scores: np.ndarray) -> np.ndarray:
         """
@@ -788,7 +754,7 @@ class CellTypeAnnotator:
         return hard_X
 
     # ---------- Gurobi MILP (exact 0/1 assignment with row=1, col=quota) ----------
-    def _solve_mip(self, scores: np.ndarray, quotas: np.ndarray) -> np.ndarray:
+    def _solve_mip(self, scores: np.ndarray, quotas: np.ndarray, global_quota=True, spot_quota=True) -> np.ndarray:
         if not _GUROBI_AVAILABLE:
             raise RuntimeError("Gurobi not available, cannot run MILP.")
 
@@ -861,19 +827,21 @@ class CellTypeAnnotator:
         for i in range(nseg):
             model.addConstr(gp.quicksum(X[i, k] for k in range(ntypes)) == 1)
 
-        # Global quotas
-        for k in range(ntypes):
-            model.addConstr(gp.quicksum(X[i, k] for i in range(nseg)) == int(quotas[k]))
-
-        # Spot-level quotas for covered segments
-        s_nz = 0
-        for s in range(A.shape[0]):
-            if not nz_mask[s]:
-                continue
-            seg_ids = A.indices[A.indptr[s]:A.indptr[s + 1]]
+        if global_quota:
+            # Global quotas
             for k in range(ntypes):
-                model.addConstr(gp.quicksum(X[i, k] for i in seg_ids) == int(V_nz[s_nz, k]))
-            s_nz += 1
+                model.addConstr(gp.quicksum(X[i, k] for i in range(nseg)) == int(quotas[k]))
+
+        if spot_quota:
+            # Spot-level quotas for covered segments
+            s_nz = 0
+            for s in range(A.shape[0]):
+                if not nz_mask[s]:
+                    continue
+                seg_ids = A.indices[A.indptr[s]:A.indptr[s + 1]]
+                for k in range(ntypes):
+                    model.addConstr(gp.quicksum(X[i, k] for i in seg_ids) == int(V_nz[s_nz, k]))
+                s_nz += 1
 
         logger.info("Gurobi optimization started...")
         start_time = time.time()

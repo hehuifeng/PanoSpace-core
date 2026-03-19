@@ -376,6 +376,8 @@ def celltype_annotator(
     alpha: float = 0.3,
     ot_mode: str = "emd",
     sinkhorn_reg: float = 0.01,
+    _global_quota = True,
+    _spot_quota = True
 ) -> AnnData:
     """
     Assign cell types to segmented cells using deconvolution outputs.
@@ -424,6 +426,8 @@ def celltype_annotator(
         alpha=alpha,
         ot_mode=ot_mode,
         sinkhorn_reg=sinkhorn_reg,
+        _global_quota=_global_quota,            
+        _spot_quota=_spot_quota                
     )
     return seg_adata_pred, _seg_adata_pred
 

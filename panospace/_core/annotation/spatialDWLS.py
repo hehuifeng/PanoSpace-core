@@ -37,7 +37,11 @@ def annotate_cells_core(
     adata_vis = adata_vis[:, adata_vis.var.highly_variable]
 
     logger.info("Computing PCA...")
-    adata_vis.X = np.asarray(adata_vis.X)
+    # Convert to dense array if sparse, keep as-is if already dense
+    if hasattr(adata_vis.X, 'toarray'):
+        adata_vis.X = adata_vis.X.toarray()
+    else:
+        adata_vis.X = np.asarray(adata_vis.X)
     sc.pp.pca(adata_vis, svd_solver='arpack')
     logger.info("Computing neighbors...")
     sc.pp.neighbors(adata_vis, n_neighbors=n_neighbors, n_pcs=n_pca)
@@ -74,7 +78,12 @@ def annotate_cells_core(
     })
     Sig_scran = marker_df.melt()['value'].dropna().unique()
 
-    norm_exp = np.expm1(sc_adata.X.toarray())
+    # Convert to dense array if sparse, keep as-is if already dense
+    if hasattr(sc_adata.X, 'toarray'):
+        sc_X = sc_adata.X.toarray()
+    else:
+        sc_X = sc_adata.X
+    norm_exp = np.expm1(sc_X)
     Sig_exp = []
 
     # Compute mean per cell type
@@ -92,8 +101,11 @@ def annotate_cells_core(
 
     # Sig_exp_df = Sig_exp_df.loc[Sig_exp_df.index.isin(Sig_scran)] # Keep only marker genes
     logger.info("Retaining %d marker genes for deconvolution.", Sig_exp_df.shape[0])
+    X = adata_vis.raw.X
+    if hasattr(X, "toarray"):
+        X = X.toarray()
     expr_df = pd.DataFrame(
-        adata_vis.raw.X.A if hasattr(adata_vis.raw.X, "A") else adata_vis.raw.X,  # Convert sparse matrix
+        X,
         index=adata_vis.raw.obs_names,
         columns=adata_vis.raw.var_names
     ).T

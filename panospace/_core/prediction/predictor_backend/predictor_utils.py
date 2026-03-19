@@ -46,8 +46,12 @@ def compute_celltype_means_sparse(
     valid = labels.notna().to_numpy()
 
     X = sc_adata.X
-    if not sp.isspmatrix_csr(X):
+    # Convert to CSR if sparse but not CSR, or if dense convert to CSR
+    if sp.isspmatrix(X) and not sp.isspmatrix_csr(X):
         X = X.tocsr()
+    elif not sp.isspmatrix(X):
+        # Convert dense array to CSR
+        X = csr_matrix(X)
     X = X[valid]
 
     codes = labels[valid].cat.codes.to_numpy()
@@ -168,7 +172,7 @@ class GeneExpPredictor:
 
         Output tensor shape: (K, S, G).
         """
-        Y = self.spot_adata.X  # (S, G)
+        Y = self.spot_adata.X.toarray() if isinstance(self.spot_adata.X, sp.spmatrix) else self.spot_adata.X  # (S, G)
         beta = self.spot_adata.obs[celltype_list].to_numpy().T  # (K, S)
 
         mu_sparse = compute_celltype_means_sparse(

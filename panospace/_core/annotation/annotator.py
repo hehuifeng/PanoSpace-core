@@ -15,7 +15,9 @@ def annotator_core(
     priori_type_affinities: Dict[str, float] | None = None,
     alpha: float = 0.3,
     ot_mode: str = "emd",          # "sinkhorn" or "emd"
-    sinkhorn_reg: float = 0.01     # Sinkhorn regularization
+    sinkhorn_reg: float = 0.01,     # Sinkhorn regularization
+    _global_quota=True,            
+    _spot_quota=True               
 ) -> AnnData:
     """Annotate segmented cells with cell types using spot-level and super-resolved deconvolution results.
 
@@ -56,7 +58,9 @@ def annotator_core(
         priori_type_affinities=priori_type_affinities,
         alpha=alpha,
         ot_mode=ot_mode,                # "sinkhorn" or "emd"
-        sinkhorn_reg=sinkhorn_reg       # Sinkhorn regularization
+        sinkhorn_reg=sinkhorn_reg,       # Sinkhorn regularization
+        _global_quota=_global_quota,            
+        _spot_quota=_spot_quota               
     )
     _seg_adata_pred.filter_and_build_affiliations()
     _seg_adata_pred.compute_counts_and_integerize()
