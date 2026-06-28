@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Optional
 
 if TYPE_CHECKING:
     from anndata import AnnData
@@ -25,6 +25,8 @@ def predictor_core(
     infered_adata: AnnData,
     celltype_list: List[str],
     celltype_column: str = "celltype_major",
+    weight: str = "inverse",
+    sigma: Optional[float] = None,
 ) -> AnnData:
     """Run the sparse prediction pipeline end-to-end.
 
@@ -80,7 +82,9 @@ def predictor_core(
         gamma=0.1,      # soft constraint toward labeled initialisation
         iterations=20,  # maximum number of diffusion steps
         tol=1e-4,       # early-stopping tolerance on mean squared change
-        patience=5      # allowed non-improving iterations
+        patience=5,     # allowed non-improving iterations
+        weight=weight,  # edge weighting scheme for the Delaunay graph
+        sigma=sigma,    # Gaussian bandwidth (only used when weight="gaussian")
     )
 
     logger.info("Predictor core completed in %.2f seconds.", time.time() - start_time)

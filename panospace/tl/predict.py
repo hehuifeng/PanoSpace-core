@@ -28,6 +28,8 @@ def genexp_predictor(
     celltype_list: list[str],
     celltype_column: str = "celltype_major",
     backend: str = "predictor",
+    weight: str = "inverse",
+    sigma: float | None = None,
 ) -> AnnData:
     """Predict spatial gene expression from single-cell reference.
 
@@ -48,6 +50,13 @@ def genexp_predictor(
         Column in `sc_adata.obs` storing cell-type labels.
     backend : {"predictor"}, default="predictor"
         Prediction backend. Currently only `"predictor"` is supported.
+    weight : {"inverse", "gaussian"}, default="inverse"
+        Edge weighting for the nuclei diffusion graph:
+        - "inverse":  w = 1 / (d + 1e-6)
+        - "gaussian": w = exp(-d^2 / (2 * sigma^2))
+    sigma : float, optional
+        Gaussian bandwidth. Only used when weight="gaussian"; when None,
+        sigma defaults to the mean Delaunay edge length.
 
     Returns
     -------
@@ -80,6 +89,8 @@ def genexp_predictor(
         infered_adata=infered_adata,
         celltype_list=celltype_list,
         celltype_column=celltype_column,
+        weight=weight,
+        sigma=sigma,
     )
 
     logger.info(

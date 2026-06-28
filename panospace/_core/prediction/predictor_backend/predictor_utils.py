@@ -71,12 +71,30 @@ def compute_celltype_means_sparse(
     return means.tocsr()
 
 
-def build_delaunay_graph(coords: np.ndarray) -> csc_matrix:
+def build_delaunay_graph(
+    coords: np.ndarray,
+    weight: str = "inverse",
+    sigma: Optional[float] = None,
+) -> csc_matrix:
     """
-    Construct a Delaunay-based adjacency matrix with inverse-distance weights
-    and explicit self-loops.
+    Construct a Delaunay-based adjacency matrix with explicit self-loops.
 
-    Returns a CSC matrix (not normalized).
+    Parameters
+    ----------
+    coords : ndarray of shape (n, 2)
+        Node coordinates.
+    weight : {"inverse", "gaussian"}, default="inverse"
+        Edge weighting scheme:
+        - "inverse":  w = 1 / (d + 1e-6)
+        - "gaussian": w = exp(-d^2 / (2 * sigma^2))
+    sigma : float, optional
+        Gaussian bandwidth. Only consulted when weight="gaussian". When None,
+        sigma defaults to the mean Delaunay edge length (a local-scale default).
+
+    Returns
+    -------
+    csc_matrix
+        (Not row-normalized; the caller is responsible.)
     """
     n = coords.shape[0]
     if n == 0:
@@ -84,10 +102,10 @@ def build_delaunay_graph(coords: np.ndarray) -> csc_matrix:
     if n == 1:
         return sp.eye(1, format="csc", dtype=np.float32)
 
-    tri = Delaunay(coords)
+    if weight not in ("inverse", "gaussian"):
+        raise ValueError(f"Unknown weight mode: {weight!r}")
 
-    rows, cols, data = [], [], []
-    incident_weights: Dict[int, List[float]] = {i: [] for i in range(n)}
+    tri = Delaunay(coords)
 
     edges = set()
     for simplex in tri.simplices:
@@ -99,8 +117,19 @@ def build_delaunay_graph(coords: np.ndarray) -> csc_matrix:
                 d = float(np.linalg.norm(coords[u] - coords[v]))
                 edges.add((u, v, d))
 
+    if weight == "gaussian":
+        if sigma is None:
+            sigma = float(np.mean([d for _, _, d in edges])) if edges else 1.0
+        two_sigma_sq = 2.0 * (sigma ** 2)
+
+    rows, cols, data = [], [], []
+    incident_weights: Dict[int, List[float]] = {i: [] for i in range(n)}
+
     for u, v, d in edges:
-        w = 1.0 / (d + 1e-6)
+        if weight == "inverse":
+            w = 1.0 / (d + 1e-6)
+        else:
+            w = float(np.exp(-d * d / two_sigma_sq))
         rows.extend([u, v])
         cols.extend([v, u])
         data.extend([w, w])
@@ -209,6 +238,8 @@ class GeneExpPredictor:
         early_stop: bool = True,
         tol: float = 1e-4,
         patience: int = 5,
+        weight: str = "inverse",
+        sigma: Optional[float] = None,
     ) -> ad.AnnData:
         """
         Diffuse cell-type-specific spot expression to nuclei coordinates.
@@ -242,7 +273,7 @@ class GeneExpPredictor:
             xy = xy[order]
             obs_names = nuc.obs_names[order]
 
-            W = build_delaunay_graph(xy)
+            W = build_delaunay_graph(xy, weight=weight, sigma=sigma)
             d = np.asarray(W.sum(axis=1)).ravel()
             d[d == 0.0] = 1.0
             W = diags(1.0 / d) @ W
