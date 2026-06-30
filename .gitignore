@@ -15,6 +15,7 @@ build/
 .vscode/
 
 .claude
+CLAUDE.md
 .pytest_cache/
 
 # PyPI 发布指南（不发布到 GitHub）
