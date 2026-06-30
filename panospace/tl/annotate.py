@@ -34,7 +34,7 @@ from pathlib import Path
 import numpy as np
 
 import logging
-from typing import List, Literal, Optional, Dict, Any
+from typing import List, Literal, Optional, Dict, Any, Union
 import traceback
 import pandas as pd
 from anndata import AnnData
@@ -314,8 +314,11 @@ def superres_celltype(
     pretrained_model_name: str = "facebook/dinov2-base",
     cache_dir: str = "~/.panospace_cache",
     batch_size: int = 32,
-    num_workers: int = 4,
+    num_workers: int = 0,
     accelerator: Literal["cpu", "gpu"] = "gpu",
+    precision: Literal["16-mixed", "32", "64"] = "16-mixed",
+    devices: Union[int, str] = "auto",
+    seed: int = 42,
 ) -> AnnData:
     """
     Refine deconvolution results at higher spatial resolution using DINOv2.
@@ -331,13 +334,24 @@ def superres_celltype(
     radius : int, optional
         Radius for image patch extraction (default: 129).
     epoch : int, optional
-        Number of training epochs (default: 50).
+        Maximum number of training epochs (default: 50); early stopping usually
+        halts training well before this.
     batch_size : int, optional
-        Batch size for training (default: 32).
+        Batch size for MLP training (default: 32). DINOv2 features are
+        pre-extracted once, so the ViT input size no longer bounds this.
     num_workers : int, optional
-        Number of data loader workers (default: 4).
+        DataLoader workers (default: 0). Pre-extracted features live in memory
+        as tensors, so extra workers usually add IPC overhead for no gain.
     accelerator : {"cpu", "gpu"}, optional
         Compute device (default: "gpu").
+    precision : {"16-mixed", "32", "64"}, optional
+        Mixed precision mode forwarded to ``pl.Trainer`` (default: "16-mixed").
+        Pass ``"32"`` for full fp32 if you hit numerical issues.
+    devices : int or "auto", optional
+        Number of devices for ``pl.Trainer`` (default: "auto").
+    seed : int, optional
+        Random seed for ``pl.seed_everything`` and the train/val split
+        (default: 42).
 
     Returns
     -------
@@ -361,6 +375,9 @@ def superres_celltype(
         batch_size=batch_size,
         num_workers=num_workers,
         accelerator=accelerator,
+        precision=precision,
+        devices=devices,
+        seed=seed,
     )
     return sr_adata
 
