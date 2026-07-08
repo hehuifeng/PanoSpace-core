@@ -319,6 +319,8 @@ def superres_celltype(
     precision: Literal["16-mixed", "32", "64"] = "16-mixed",
     devices: Union[int, str] = "auto",
     seed: int = 42,
+    patience: Union[int, None] = None,
+    val_frac: float = 0.15,
 ) -> AnnData:
     """
     Refine deconvolution results at higher spatial resolution using DINOv2.
@@ -352,6 +354,16 @@ def superres_celltype(
     seed : int, optional
         Random seed for ``pl.seed_everything`` and the train/val split
         (default: 42).
+    patience : int or None, optional
+        Early-stopping patience on ``val_loss`` (default: ``None`` = disabled).
+        The default reflects that this pipeline predicts on the same section
+        it trains on — there's no held-out generalization target, so disabling
+        early stopping fits the training spots as tightly as possible. Pass a
+        positive int (e.g. 8) to enable early stopping with a ``val_frac``
+        hold-out.
+    val_frac : float, optional
+        Fraction of spots held out for validation when ``patience`` is set
+        (default: 0.15). Ignored when ``patience is None``.
 
     Returns
     -------
@@ -378,6 +390,8 @@ def superres_celltype(
         precision=precision,
         devices=devices,
         seed=seed,
+        patience=patience,
+        val_frac=val_frac,
     )
     return sr_adata
 

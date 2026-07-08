@@ -32,6 +32,8 @@ def superres_core(
     precision: Literal['16-mixed', '32', '64'] = '16-mixed',
     devices: Union[int, str] = 'auto',
     seed: int = 42,
+    patience: Union[int, None] = None,
+    val_frac: float = 0.15,
 ):
     sr_inferencer = DINOv2_superres_deconv(deconv_adata,
                                 img_dir=img_dir,
@@ -48,6 +50,7 @@ def superres_core(
         sr_inferencer.run_train(
             epoch=epoch, batch_size=batch_size, num_workers=num_workers,
             accelerator=accelerator, precision=precision, devices=devices, seed=seed,
+            patience=patience, val_frac=val_frac,
         )
     else:
         logger.info("Using pre-trained super-resolution model...")

@@ -538,7 +538,8 @@ class DINOv2_superres_deconv(object):
                   feature_batch_size: int = 64,
                   extract_device: Union[str, None] = None,
                   extract_precision: Union[str, None] = None,
-                  val_frac: float = 0.15, patience: int = 8):
+                  val_frac: float = 0.15,
+                  patience: Union[int, None] = None):
         """Train the MLP head on cached DINOv2 features.
 
         Parameters
@@ -548,6 +549,19 @@ class DINOv2_superres_deconv(object):
             extraction (defaults to CUDA + same precision as training when
             available, else CPU/fp32). Features are cached on disk and only
             computed once across train+predict.
+        patience : int or None
+            If ``None`` (default), no early stopping: train on *all* spots
+            for ``epoch`` epochs and save the final-epoch weights. This is the
+            right default for this pipeline because we predict on the same
+            section we train on — there is no held-out generalization target,
+            so restraining fit (via early stopping) only sacrifices training
+            accuracy without buying anything. Pass a positive int to enable
+            ``EarlyStopping(monitor='val_loss', patience=...)`` with a
+            ``val_frac`` hold-out; the best-val-loss checkpoint is then loaded
+            before persistence.
+        val_frac : float
+            Fraction of spots to hold out for validation when ``patience`` is
+            set. Ignored when ``patience is None``.
         """
         pl.seed_everything(seed, workers=True)
 
@@ -565,45 +579,59 @@ class DINOv2_superres_deconv(object):
             feat["spot_center"], feat["spot_neighbor"], feat["spot_labels"],
         )
         n_total = len(full_ds)
-        if n_total < 4:
-            raise RuntimeError(
-                f"Too few spots ({n_total}) to split into train/val; need >=4"
+        if n_total < 2:
+            raise RuntimeError(f"Too few spots ({n_total}) to train; need >=2")
+
+        if patience is None:
+            # Same-section inference → fit all spots as tightly as possible.
+            train_loader = DataLoader(full_ds, batch_size=batch_size, shuffle=True,
+                                      num_workers=num_workers)
+            val_loader = None
+            callbacks = []
+            ckpt_cb = None
+        else:
+            if n_total < 4:
+                raise RuntimeError(
+                    f"Too few spots ({n_total}) to split into train/val; need >=4"
+                )
+            n_val = max(1, int(n_total * val_frac))
+            n_train = n_total - n_val
+            gen = torch.Generator().manual_seed(seed)
+            train_ds, val_ds = random_split(full_ds, [n_train, n_val], generator=gen)
+            train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,
+                                      num_workers=num_workers)
+            val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False,
+                                    num_workers=num_workers)
+            ckpt_cb = ModelCheckpoint(
+                monitor="val_loss", save_top_k=1, mode="min",
+                filename="superres-{epoch:02d}-{val_loss:.3f}", dirpath=self.path,
             )
-        n_val = max(1, int(n_total * val_frac))
-        n_train = n_total - n_val
-        gen = torch.Generator().manual_seed(seed)
-        train_ds, val_ds = random_split(full_ds, [n_train, n_val], generator=gen)
+            callbacks = [
+                EarlyStopping(monitor="val_loss", patience=patience, mode="min"),
+                ckpt_cb,
+            ]
 
-        train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,
-                                  num_workers=num_workers)
-        val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False,
-                                num_workers=num_workers)
-
-        ckpt_cb = ModelCheckpoint(
-            monitor="val_loss", save_top_k=1, mode="min",
-            filename="superres-{epoch:02d}-{val_loss:.3f}", dirpath=self.path,
-        )
-        callbacks = [
-            EarlyStopping(monitor="val_loss", patience=patience, mode="min"),
-            ckpt_cb,
-        ]
-        # logger=False keeps the cache dir tidy; LearningRateMonitor needs a
-        # logger, so callers who want LR curves should pass their own logger.
+        # logger=False keeps the cache dir tidy; LearningRateMonitor would need
+        # a logger, so callers wanting LR curves pass their own.
+        # enable_checkpointing mirrors ckpt_cb: False when there's no val split
+        # (Lightning refuses ModelCheckpoint + enable_checkpointing=False), True
+        # when our callback drives best-val-loss saving.
         trainer = pl.Trainer(
             max_epochs=epoch, precision=precision, accelerator=accelerator,
             devices=devices, callbacks=callbacks,
             gradient_clip_val=1.0,
-            logger=False,
+            logger=False, enable_checkpointing=(ckpt_cb is not None),
         )
         trainer.fit(self.model, train_loader, val_loader)
 
-        # Load the best (lowest val_loss) weights back, then persist to the
-        # canonical path so the next run skips training.
-        best = ckpt_cb.best_model_path
-        if best and os.path.exists(best):
-            best_state = torch.load(best, map_location="cpu",
-                                    weights_only=False)["state_dict"]
-            self.model.load_state_dict(best_state)
+        # With early stopping, load best-val-loss weights before persisting.
+        # Without it, self.model already holds the final-epoch state.
+        if ckpt_cb is not None:
+            best = ckpt_cb.best_model_path
+            if best and os.path.exists(best):
+                best_state = torch.load(best, map_location="cpu",
+                                        weights_only=False)["state_dict"]
+                self.model.load_state_dict(best_state)
         trainer.save_checkpoint(os.path.join(self.path, "superres_model.ckpt"))
         self.train = False
 
