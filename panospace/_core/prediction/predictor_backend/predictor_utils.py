@@ -234,7 +234,7 @@ class GeneExpPredictor:
     def infer_expression(
         self,
         gamma: float = 0.1,
-        iterations: int = 10,
+        iterations: int = 5,
         early_stop: bool = True,
         tol: float = 1e-4,
         patience: int = 5,

@@ -17,6 +17,7 @@ build/
 .claude
 CLAUDE.md
 .pytest_cache/
+try/
 
 # PyPI 发布指南（不发布到 GitHub）
 PYPI_PUBLISHING_GUIDE.md
