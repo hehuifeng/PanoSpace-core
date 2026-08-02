@@ -9,6 +9,8 @@ This version provides:
 from __future__ import annotations
 
 import logging
+import os
+import warnings
 from pathlib import Path
 from time import perf_counter
 from typing import Any, TYPE_CHECKING, Union, Literal
@@ -47,9 +49,11 @@ def _lazy_detector():
     from torchvision import transforms
 
     class CellViTDetector:
-        def __init__(self, model_name: Literal["HIPT", "SAM"], device: str = "cuda:0", resize=(256,256), mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)):
+        def __init__(self, model_name: Literal["HIPT", "SAM"], device: str = "cuda:0",
+                     input_size: int = 256, mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)):
             self.device = device
             self.model_name = model_name.upper()
+            self.input_size = int(input_size)  # single source of truth for model pixel input
 
             if self.model_name == "SAM":
                 model_path = cache_cellvit_sam(logger=logger)  # logger is optional
@@ -62,7 +66,7 @@ def _lazy_detector():
             config = unflatten_dict(ckpt["config"], ".") if "config" in ckpt else ckpt["run_conf"]
             arch = ckpt["arch"]
             self.tranformer = transforms.Compose([
-                transforms.Resize(resize),  
+                transforms.Resize((self.input_size, self.input_size)),
                 transforms.ToTensor(),
                 transforms.Normalize(mean=mean, std=std)
             ])
@@ -220,6 +224,35 @@ def detect_cells_core(
 
     CellViTDetector = _lazy_detector()
     detector = CellViTDetector(model_name, device)
+
+    # --- reconcile tile_size with model input size ---
+    # CellViT models (256 ≈ CellViT-256, CellViT-SAM) have their backbone
+    # positional embeddings structurally locked to the training input size.
+    # detect_patch() normalises every tile to input_size via Resize; the rest
+    # of the pipeline (tiler, offset, margin/dedup in process_cell_instance
+    # and CellPostProcessor) operates in tile_size-coordinate space.  When
+    # these two disagree the cell coordinates are mis-scaled and the margin
+    # classification produces periodic dead zones (silent, no error).
+    #
+    # We force tile_size == detector.input_size and warn; set
+    # PANOSPACE_STRICT_TILESIZE=1 to raise a ValueError instead.
+    import os as _os
+    _model_input = detector.input_size
+    if tile_size != _model_input:
+        _msg = (
+            f"tile_size={tile_size} does not match CellViT native input size "
+            f"{_model_input} for model_name={model_name!r}.  "
+            f"Forcing tile_size={_model_input} to prevent coordinate-space "
+            f"mismatch (which silently causes periodic dead-zone under-detection).  "
+            f"Runtime cost scales as ~{(tile_size / _model_input) ** 2:.1f}× "
+            f"slower than the requested tile_size when tile_size > input_size.  "
+            f"Set PANOSPACE_STRICT_TILESIZE=1 to raise ValueError instead."
+        )
+        if _os.environ.get("PANOSPACE_STRICT_TILESIZE") == "1":
+            raise ValueError(_msg)
+        warnings.warn(_msg, RuntimeWarning, stacklevel=2)
+        logger.warning(_msg)
+        tile_size = _model_input
 
     logger.info(
         "[CellViT] Running inference on image shape %s (tile %d, overlap %d)",

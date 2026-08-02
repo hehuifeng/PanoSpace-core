@@ -54,11 +54,14 @@ def detect_cells(
         Device to use for inference ("cuda", "cpu", or None for auto-detection).
         If None, will automatically detect the best available device.
     tile_size
-        Size of tiles for processing large images. CellViT models expect inputs
-        that are multiples of their patch size (typically 256). Recommended values:
-        256, 512, 768, 1024, etc. If None, defaults to 256.
-        WARNING: CellViT models resize tiles internally, so any tile_size is
-        technically supported, but values that are multiples of 256 are most efficient.
+        Size of tiles for processing large images.  **Must equal the CellViT
+        model native input size** (256 for both ``"HIPT"`` and ``"SAM"``).  Any
+        other value is unsafe: the model resizes each tile to its fixed input
+        size internally, creating a coordinate-space mismatch that silently
+        produces periodic dead-zone under-detection.  Mismatched values are
+        **overridden to 256 with a RuntimeWarning**; set
+        ``PANOSPACE_STRICT_TILESIZE=1`` to raise ``ValueError`` instead.
+        If ``None``, defaults to 256.
     overlap
         Overlap between tiles in pixels to avoid edge artifacts. Default is 64.
         Recommended to be at least 32 and less than tile_size/4.
@@ -80,10 +83,8 @@ def detect_cells(
     >>> import panospace as ps
     >>> # Load image from file
     >>> img = Image.open("tissue.tif")
-    >>> # Basic usage - tile_size=256 is recommended for CellViT models
+    >>> # Basic usage - tile_size=256 is required for CellViT models
     >>> seg_adata, contours = ps.detect_cells(img, tile_size=256)
-    >>> # For larger images, use larger tiles (must be multiple of 256 for efficiency)
-    >>> seg_adata, contours = ps.detect_cells(img, tile_size=512)
     >>> # Force CPU inference
     >>> seg_adata, contours = ps.detect_cells(img, device="cpu", tile_size=256)
     >>> # With smaller overlap for faster processing
@@ -91,14 +92,11 @@ def detect_cells(
 
     Notes
     -----
-    CellViT models are trained on 256x256 patches. While any tile_size will work
-    (images are resized internally), using tile sizes that are multiples of 256
-    (e.g., 256, 512, 768) is more efficient as it reduces the number of resize operations.
-
-    For very large images (>500MB), consider using:
-    - tile_size=256 for most compatibility
-    - tile_size=512 or 768 for faster processing (if memory permits)
-    - Overlap of 64-128 pixels to avoid edge artifacts between tiles.
+    CellViT models are trained on 256x256 patches and their backbone positional
+    embeddings are structurally locked to that input size.  tile_size **must** be
+    256; any other value triggers a coordinate-space mismatch that silently
+    under-detects cells in periodic dead zones.  The parameter is preserved for
+    future models with different native input sizes.
     """
     # ------------------------------------------------------------------
     # 0) Device detection and parameter setup
@@ -113,8 +111,8 @@ def detect_cells(
     # Set tile_size (explicit user specification is recommended)
     if tile_size is None:
         tile_size = 256  # Default fallback
-        logger.info("No tile_size specified, using default: tile_size=256. "
-                   "For better performance, specify tile_size explicitly (256, 512, 768, etc.)")
+        logger.info("No tile_size specified, using default: tile_size=256 "
+                   "(CellViT native input size).")
 
     logger.info("Detecting cells using backend '%s' with device='%s', tile_size=%d",
                 model, device, tile_size)
